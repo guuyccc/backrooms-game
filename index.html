@@ -138,7 +138,7 @@
     p.textContent=t; s.appendChild(p); }
   if(location.protocol==='file:') show('⚠ 不要直接双击打开 HTML。\n浏览器对 file:// 有安全限制，无法加载 three.js 模块 → 白屏。\n请用本地服务器（预览面板的 backrooms 配置，或\n  python3 -m http.server 8138 --directory 后室 ）');
   window.__brReady=false;
-  setTimeout(function(){ if(!window.__brReady) show('场景 8 秒内未初始化。常见原因：\n1) file:// 打开 → 用本地服务器\n2) 无法从 unpkg CDN 加载 three.js（检查联网）\n3) 浏览器过旧，不支持 importmap / ES module\n按 F12 看控制台红色报错。'); }, 8000);
+  setTimeout(function(){ if(!window.__brReady) show('场景 60 秒内未初始化。常见原因：\n1) file:// 打开 → 用本地服务器\n2) 无法从 unpkg CDN 加载 three.js（检查联网）\n3) 浏览器过旧，不支持 importmap / ES module\n按 F12 看控制台红色报错。'); }, 60000);
 })();
 </script>
 
@@ -604,6 +604,33 @@ let glbRegion=null;              // 已删除「真实旧房间」→ 恒 null,c
 const loadbar=document.querySelector('#loadbar i');
 window.__glbLoaded=true;         // 精简:不再加载 original_backrooms.glb
 
+/* ---------- 首屏关键资源预加载:首次游玩等模型/音频/贴图进缓存后再允许开始 ---------- */
+const CRITICAL_ASSETS=[
+  'assets/door_classroom.glb','assets/double_door.glb','assets/fire_escape_doors.glb',
+  'assets/dreamcore.glb','assets/partygoer.glb','assets/anim_walk.fbx',
+  'assets/prop_vending.glb','assets/prop_swing.glb','assets/prop_bear.glb','assets/prop_bed.glb',
+  'assets/prop_chair.glb','assets/prop_morris.glb','assets/prop_pool.glb','assets/prop_foldchairs.glb',
+  'assets/prop_tv.glb','assets/prop_duck.glb','assets/prop_balloons.glb','assets/prop_arch.glb',
+  'assets/wallpapers/wp_2.jpg','assets/wallpapers/wp_9.jpg','assets/wallpapers/wp_4.jpg',
+  'assets/fabric028_color.jpg','assets/fabric028_normal.jpg','assets/fabric028_rough.jpg',
+  'assets/audio/steps_walk.mp3','assets/audio/steps_run.mp3','assets/audio/breath_run.mp3',
+  'assets/audio/breath_walk.mp3','assets/audio/breath_idle.mp3','assets/audio/monster_near.mp3',
+  'assets/audio/dream_bgm.mp3','assets/audio/dream_exit.mp3','assets/audio/duck_squeak.mp3'
+];
+const preloadState={done:0,total:CRITICAL_ASSETS.length,failed:0,target:0,shown:0,complete:false};
+window.__preloadState=preloadState;
+function preloadCriticalAssets(){
+  const minLoadMs=3600, startedAt=performance.now();
+  const jobs=CRITICAL_ASSETS.map(url=>fetch(url,{cache:'force-cache'})
+    .then(r=>{ if(!r.ok) throw new Error(r.status+' '+url); return r.arrayBuffer(); })
+    .catch(e=>{ preloadState.failed++; console.warn('资源预加载失败:', url, e); })
+    .finally(()=>{ preloadState.done++; preloadState.target=Math.min(96, (preloadState.done/preloadState.total)*96); }));
+  return Promise.allSettled(jobs).then(()=>new Promise(resolve=>{
+    const wait=Math.max(0, minLoadMs-(performance.now()-startedAt));
+    setTimeout(()=>{ preloadState.target=100; preloadState.complete=true; resolve(); }, wait);
+  }));
+}
+
 /* ============================================================
    真实门模型:放进门洞 + 四周补墙(和墙连成一体,非悬空)
    ============================================================ */
@@ -896,10 +923,28 @@ addEventListener('mousemove',e=>{ if(!locked||paused) return;
 startBtn.addEventListener('click',()=>{ if(startBtn.disabled) return; requestLock(); });
 document.getElementById('againBtn').addEventListener('click',()=>location.reload());
 
-// GLB 就绪或超时后允许开始
-(function ready(){ let n=0; const t=setInterval(()=>{ n++;
-  if(window.__glbLoaded || n>60){ clearInterval(t); startBtn.disabled=false; startBtn.textContent=window.__loop?'醒来':'进入后室'; window.__brReady=true; loadbar.style.width='100%'; }
-},100); })();
+// 等关键资源预加载完成后才允许开始；进度条用缓动显示，避免首次打开时提前冲到 100%。
+(function ready(){
+  let unlocked=false;
+  startBtn.disabled=true;
+  startBtn.textContent='加载中… 0/'+preloadState.total;
+  preloadCriticalAssets();
+  const t=setInterval(()=>{
+    preloadState.shown += (preloadState.target-preloadState.shown)*0.08;
+    if(preloadState.complete && preloadState.shown>99.2) preloadState.shown=100;
+    loadbar.style.width=Math.max(2, preloadState.shown).toFixed(1)+'%';
+    if(!preloadState.complete){
+      startBtn.textContent='加载中… '+preloadState.done+'/'+preloadState.total;
+    }else if(!unlocked){
+      unlocked=true;
+      clearInterval(t);
+      loadbar.style.width='100%';
+      startBtn.disabled=false;
+      startBtn.textContent=window.__loop?'醒来':'进入后室';
+      window.__brReady=true;
+    }
+  },100);
+})();
 
 /* ---------- 碰撞：圆 vs 附近墙AABB 推出 ---------- */
 function collide(px,pz){
