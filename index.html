@@ -1,0 +1,1968 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>后室 · THE BACKROOMS</title>
+<style>
+  :root{ --amber:#d8c86a; }
+  *{ margin:0; padding:0; box-sizing:border-box; }
+  html,body{ width:100%; height:100%; overflow:hidden; background:#0b0b06; }
+  body{ font-family:"Courier New",ui-monospace,monospace; color:#e8e2b8; cursor:default; }
+  #app{ position:fixed; inset:0; }
+  #app canvas{ display:block; width:100%!important; height:100%!important; }
+
+  /* 暗角 + 荧光噪点覆盖层 */
+  #vignette{ position:fixed; inset:0; pointer-events:none; z-index:5;
+    background:radial-gradient(ellipse at center, rgba(0,0,0,0) 46%, rgba(0,0,0,0.55) 100%);
+    mix-blend-mode:multiply; }
+  #grain{ position:fixed; inset:0; pointer-events:none; z-index:6; opacity:.06;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E"); }
+  /* 被 NPC 注视时的红晕(检测条驱动) */
+  #dread{ position:fixed; inset:0; pointer-events:none; z-index:8; opacity:0; transition:opacity .12s linear;
+    background:radial-gradient(ellipse at center, rgba(120,0,0,0) 28%, rgba(95,0,0,0.5) 78%, rgba(45,0,0,0.9) 100%); }
+
+  /* 准星 */
+  #cross{ position:fixed; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px; z-index:7;
+    border:1px solid rgba(232,226,184,.5); border-radius:50%; pointer-events:none; opacity:0; transition:opacity .3s; }
+  #cross.on{ opacity:.7; }
+
+  /* HUD */
+  #hud{ position:fixed; left:0; right:0; bottom:0; z-index:7; padding:16px 20px;
+    display:flex; justify-content:space-between; align-items:flex-end; pointer-events:none;
+    opacity:0; transition:opacity .6s; text-shadow:0 1px 3px #000; }
+  #hud.on{ opacity:1; }
+  #hud .obj{ font-size:13px; letter-spacing:2px; color:#cbbf7a; }
+  #hud .obj b{ color:#fff2a8; }
+  #hud .stat{ font-size:12px; text-align:right; color:#9a9160; line-height:1.6; }
+  #san{ position:fixed; left:50%; bottom:30px; transform:translateX(-50%); z-index:7; opacity:0; transition:opacity .5s;
+    display:flex; flex-direction:column; align-items:center; gap:7px; pointer-events:none; }
+  #san .lbl{ font-size:10px; letter-spacing:7px; font-weight:600; color:#e0928d; text-shadow:0 0 10px rgba(210,40,40,.55); }
+  #san .bar{ position:relative; width:300px; height:5px; border-radius:3px; background:rgba(26,6,6,.55);
+    box-shadow:inset 0 0 6px rgba(0,0,0,.7), 0 0 0 1px rgba(210,70,70,.22); overflow:hidden; }
+  #san .bar i{ display:block; height:100%; width:100%; border-radius:3px;
+    background:linear-gradient(90deg,#5e0f12,#d8352f 55%,#ff6f63); box-shadow:0 0 12px rgba(226,50,45,.75); transition:width .18s linear; }
+  /* 手写纸条 + 日志 */
+  #note, #journal{ position:fixed; inset:0; z-index:22; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.72); }
+  #note .paper{ position:relative; max-width:520px; width:76%; padding:46px 48px; transform:rotate(-0.6deg); color:#221e16; border-radius:2px;
+    background:linear-gradient(160deg,#efe9d6,#e5dcc2); box-shadow:0 30px 60px rgba(0,0,0,.6), inset 0 0 70px rgba(150,130,90,.22);
+    font-family:'Songti SC','STSong','Noto Serif SC','SimSun',Georgia,serif; }
+  #note .txt{ font-size:19px; line-height:2.0; letter-spacing:2px; font-weight:600; white-space:pre-line; }
+  #note .hint, #journal .hint{ margin-top:24px; font-size:12px; letter-spacing:3px; color:#8a7d55; font-family:sans-serif; text-align:center; }
+  #journal .jwrap{ max-width:560px; width:80%; max-height:74vh; overflow:auto; padding:32px 40px; background:rgba(18,16,11,.94);
+    border:1px solid rgba(200,190,140,.22); border-radius:6px; }
+  #journal h3{ color:#cfc088; font-size:15px; letter-spacing:6px; text-align:center; margin-bottom:18px; font-weight:600; }
+  #journal .jitem{ font-family:'Songti SC','STSong','Noto Serif SC','SimSun',Georgia,serif; color:#dccfa6; font-size:18px; line-height:1.7; white-space:pre-line;
+    padding:11px 15px; margin:9px 0; background:rgba(230,220,190,.05); border-left:2px solid rgba(200,180,120,.4); }
+  #journal .jempty{ color:#7a7350; text-align:center; font-size:14px; padding:20px; }
+  #msg{ position:fixed; left:50%; top:64%; transform:translateX(-50%); z-index:7;
+    font-size:15px; letter-spacing:3px; color:#efe6a0; text-shadow:0 2px 6px #000;
+    opacity:0; transition:opacity .8s; pointer-events:none; text-align:center; white-space:pre; }
+
+  /* 开始/结束遮罩 */
+  .screen{ position:fixed; inset:0; z-index:20; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; text-align:center; gap:22px; padding:32px;
+    background:radial-gradient(ellipse at center,#171607 0%,#0a0a05 80%); }
+  .screen.hidden{ display:none; }
+  .screen h1{ font-size:min(9vw,58px); letter-spacing:min(3vw,18px); font-weight:700;
+    color:#e9d96e; text-shadow:0 0 24px rgba(216,200,106,.35),0 3px 0 #4a4411; }
+  .screen h1 small{ display:block; font-size:14px; letter-spacing:6px; margin-top:14px; color:#8c854e; font-weight:400; }
+  .screen p{ max-width:560px; font-size:14px; line-height:1.9; color:#b7ae76; }
+  .keys{ display:flex; gap:10px; flex-wrap:wrap; justify-content:center; font-size:12px; color:#cfc688; }
+  .keys span{ border:1px solid #55502a; border-radius:5px; padding:6px 11px; background:rgba(216,200,106,.05); }
+  .btn{ margin-top:6px; pointer-events:auto; cursor:pointer; user-select:none;
+    border:1px solid #b3a24e; color:#f3e89a; background:rgba(216,200,106,.08);
+    padding:14px 40px; font-size:15px; letter-spacing:6px; border-radius:6px;
+    transition:all .2s; font-family:inherit; }
+  .btn:hover{ background:rgba(216,200,106,.2); box-shadow:0 0 30px rgba(216,200,106,.25); color:#fff; }
+  #loadbar{ width:220px; height:3px; background:#2a2811; border-radius:2px; overflow:hidden; }
+  #loadbar i{ display:block; height:100%; width:0%; background:var(--amber); transition:width .3s; }
+  #winStats{ font-size:13px; color:#cfc688; line-height:2; letter-spacing:2px; }
+  .fadeflash{ position:fixed; inset:0; z-index:19; background:#000; opacity:0; pointer-events:none;
+    transition:opacity .12s; }
+  .hint{ font-size:11px; color:#6d6740; letter-spacing:2px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="vignette"></div>
+<div id="grain"></div>
+<div id="dread"></div>
+<div id="cross"></div>
+<div class="fadeflash" id="flash"></div>
+
+<div id="hud">
+  <div class="obj" id="objText">目标：<b>寻找出路</b></div>
+  <div class="stat" id="statText"></div>
+</div>
+<div class="screen hidden" id="pauseScreen">
+  <h1 style="font-size:min(7vw,44px);letter-spacing:min(2.4vw,14px)">暂 停<small>你停在了后室里</small></h1>
+  <p>鼠标锁定已解除 —— 点击屏幕继续探索。</p>
+  <button class="btn" id="resumeBtn">点 击 继 续</button>
+</div>
+<div id="san"><span class="lbl">S A N</span><div class="bar"><i></i></div></div>
+<div id="note"><div class="paper"><div class="txt"></div><div class="hint">空格 收起</div></div></div>
+<div id="journal"><div class="jwrap"><h3>收 集 到 的 纸 条</h3><div class="jlist"></div><div class="hint">J 关闭</div></div></div>
+<div id="msg"></div>
+
+<!-- 开始遮罩 -->
+<div class="screen" id="startScreen">
+  <h1>后室<small>THE BACKROOMS</small></h1>
+  <p>你从白雾中醒来。黄色墙纸发霉、脱落，空气里全是潮湿的腐味。<br>
+     脑海里反复回响着几句话，<strong style="color:#e9d96e">“逃出去……”</strong><br>
+     <strong style="color:#cfc07a">“不要被 ta 找到……”</strong></p>
+  <div class="keys">
+    <span>W A S D 移动</span><span>鼠标 视角</span><span>Shift 奔跑</span><span>空格 开门 / 读纸条</span><span>J 纸条日志</span>
+  </div>
+  <div id="loadbar"><i></i></div>
+  <button class="btn" id="startBtn" disabled>加载中…</button>
+  <div class="hint">建议戴耳机 · 点击进入后锁定鼠标</div>
+</div>
+
+<!-- 胜利遮罩 -->
+<div class="screen hidden" id="winScreen">
+  <h1 style="color:#8fd08f">找到出路<small style="color:#5f7e5f">YOU ESCAPED — 暂时地</small></h1>
+  <div id="winStats"></div>
+  <p style="color:#9a9160">…但后室没有真正的尽头。这一层的门后，是另一层的开始。</p>
+  <button class="btn" id="againBtn" style="border-color:#7fae7f;color:#cfeecf">再次坠入</button>
+</div>
+
+<!-- 白屏自诊断看门狗 -->
+<script>
+(function(){
+  function show(t){ var s=document.getElementById('startScreen'); if(!s)return;
+    var b=document.getElementById('startBtn'); if(b){b.textContent='加载失败'; }
+    var p=document.createElement('p'); p.style.color='#e08a6a'; p.style.whiteSpace='pre-line';
+    p.textContent=t; s.appendChild(p); }
+  if(location.protocol==='file:') show('⚠ 不要直接双击打开 HTML。\n浏览器对 file:// 有安全限制，无法加载 three.js 模块 → 白屏。\n请用本地服务器（预览面板的 backrooms 配置，或\n  python3 -m http.server 8138 --directory 后室 ）');
+  window.__brReady=false;
+  setTimeout(function(){ if(!window.__brReady) show('场景 8 秒内未初始化。常见原因：\n1) file:// 打开 → 用本地服务器\n2) 无法从 unpkg CDN 加载 three.js（检查联网）\n3) 浏览器过旧，不支持 importmap / ES module\n按 F12 看控制台红色报错。'); }, 8000);
+})();
+</script>
+
+<script type="importmap">
+{ "imports": {
+  "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+  "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+} }
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+
+/* ============================================================
+   后室 · THE BACKROOMS —— 程序化黄墙迷宫 + 第一人称探索
+   架构：
+     · 世界：网格迷宫(生成树+braid开阔化)，墙用 InstancedMesh
+     · 材质：canvas 程序化平铺贴图(墙纸/地毯/天花板)
+     · 相机：指针锁定第一人称 + 头部摆动 + 圆vs墙AABB碰撞
+     · 氛围：浓雾 + 荧光顶灯(闪烁) + WebAudio 电流嗡鸣
+     · 目标：找到出口(绿色 EXIT 门)
+     · 特殊房间：真实 GLB 模型埋入迷宫，作为「原初房间」
+   ============================================================ */
+
+const CELL = 3.6;        // 每格边长(米)——收窄,长廊更压迫
+const GW = 30, GH = 30;  // 迷宫格数——放大,容纳房间+走廊+迷宫
+const WALL_H = 2.72;     // 层高(与模型一致)
+const WALL_T = 0.24;     // 墙厚
+const WORLD_W = GW*CELL, WORLD_H = GH*CELL;
+const EYE = 1.55;        // 眼高
+const PLYR_R = 0.30;     // 玩家碰撞半径
+
+/* 开场序列布局:出生房 → 狭长走廊 → 尽头逃生门 → 主后室(迷宫,z≥迷宫北界) */
+const INTRO_CI = Math.floor(GW/2);
+const INTRO_X  = (INTRO_CI+0.5)*CELL - WORLD_W/2;
+const INTRO_Lc = 15;                        // 走廊长
+const INTRO_Wr = 6.4, INTRO_Dr = 6.2;       // 出生房内宽/进深
+const INTRO_ZC = -WORLD_H/2;                // 迷宫北界(走廊南端)
+const INTRO_zCorrN = INTRO_ZC - INTRO_Lc;       // 走廊北端 = 房间南墙
+const INTRO_zRoomN = INTRO_zCorrN - INTRO_Dr;   // 房间北墙
+const INTRO_spawn = new THREE.Vector3(INTRO_X, EYE, INTRO_zCorrN - INTRO_Dr/2);
+
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias:true, powerPreference:'high-performance' });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+const FOG_COL = new THREE.Color(0xa89b42);
+scene.background = FOG_COL.clone().multiplyScalar(0.55);
+scene.fog = new THREE.FogExp2(FOG_COL.getHex(), 0.05);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth/innerHeight, 0.05, 300);
+camera.position.set(0, EYE, 0);
+const yaw = new THREE.Object3D();    // 水平旋转
+const pitch = new THREE.Object3D();  // 俯仰
+yaw.add(pitch); pitch.add(camera);
+scene.add(yaw);
+
+/* ---------- 灯光：扁平荧光 ---------- */
+const hemi = new THREE.HemisphereLight(0xfff3c0, 0x2c2a12, 1.15);
+scene.add(hemi);
+const ambient = new THREE.AmbientLight(0xd8c86a, 0.35);
+scene.add(ambient);
+const downLight = new THREE.DirectionalLight(0xfff6cf, 0.25);
+downLight.position.set(0.3, 1, 0.15); scene.add(downLight);
+
+/* ============================================================
+   程序化贴图(canvas)——平铺、带脏旧感
+   ============================================================ */
+function mkCanvas(s){ const c=document.createElement('canvas'); c.width=c.height=s; return c; }
+function rnd(){ return Math.random(); }
+
+function wallpaperTex(){
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle='#d6c463'; x.fillRect(0,0,s,s);
+  // 竖条纹墙纸
+  for(let i=0;i<s;i+=8){
+    const t=(i/8)%2; x.fillStyle = t? 'rgba(184,168,84,0.28)':'rgba(220,206,126,0.20)';
+    x.fillRect(i,0,4,s);
+  }
+  // 波点暗纹(32px 网格→竖直无缝平铺)
+  x.fillStyle='rgba(150,138,64,0.12)';
+  for(let gy=0;gy<s;gy+=32) for(let gx=(gy/32%2?16:0);gx<s;gx+=32){ x.beginPath(); x.arc(gx,gy,2.0,0,7); x.fill(); }
+  // 颗粒噪声
+  const img=x.getImageData(0,0,s,s), d=img.data;
+  for(let i=0;i<d.length;i+=4){ const n=(rnd()-0.5)*24; d[i]+=n; d[i+1]+=n; d[i+2]+=n*0.7; }
+  x.putImageData(img,0,0);
+  // 零星污渍(平铺时可接受)
+  for(let k=0;k<9;k++){ x.fillStyle='rgba(70,60,26,'+(0.04+rnd()*0.08)+')';
+    x.beginPath(); x.ellipse(rnd()*s,rnd()*s,10+rnd()*30,14+rnd()*44,0,0,7); x.fill(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; return t;
+}
+function carpetTex(){
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle='#3f3a17'; x.fillRect(0,0,s,s);
+  // 低频斑驳
+  for(let k=0;k<2600;k++){ const v=rnd(); x.fillStyle='rgba('+(55+v*35|0)+','+(50+v*32|0)+','+(20+v*16|0)+','+(0.12+rnd()*0.2)+')';
+    const r=2+rnd()*5; x.fillRect(rnd()*s,rnd()*s,r,r); }
+  const img=x.getImageData(0,0,s,s), d=img.data;
+  for(let i=0;i<d.length;i+=4){ const n=(rnd()-0.5)*24; d[i]+=n; d[i+1]+=n; d[i+2]+=n*0.6; }
+  x.putImageData(img,0,0);
+  for(let k=0;k<8;k++){ x.fillStyle='rgba(24,22,9,'+(0.1+rnd()*0.18)+')';
+    x.beginPath(); x.ellipse(rnd()*s,rnd()*s,20+rnd()*70,20+rnd()*70,0,0,7); x.fill(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; return t;
+}
+function ceilingTex(){
+  const s=512, c=mkCanvas(s), x=c.getContext('2d');
+  x.fillStyle='#c9c4a6'; x.fillRect(0,0,s,s);
+  // 吊顶格 2x2 tiles，带缝隙 + 冲孔纹
+  const tile=s/2;
+  for(let ty=0;ty<2;ty++)for(let tx=0;tx<2;tx++){
+    const px=tx*tile, py=ty*tile;
+    x.fillStyle='#cfcaac'; x.fillRect(px+3,py+3,tile-6,tile-6);
+    // 冲孔点
+    x.fillStyle='rgba(120,116,92,0.5)';
+    for(let a=8;a<tile-8;a+=9)for(let b=8;b<tile-8;b+=9){ if((a+b)%18===0){x.fillRect(px+a,py+b,2,2);} }
+  }
+  x.strokeStyle='#4a4735'; x.lineWidth=3;
+  x.strokeRect(0,0,s,s); x.beginPath(); x.moveTo(tile,0); x.lineTo(tile,s); x.moveTo(0,tile); x.lineTo(s,tile); x.stroke();
+  const img=x.getImageData(0,0,s,s), d=img.data;
+  for(let i=0;i<d.length;i+=4){ const n=(rnd()-0.5)*14; d[i]+=n; d[i+1]+=n; d[i+2]+=n; }
+  x.putImageData(img,0,0);
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping;
+  t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; return t;
+}
+
+const texWall = wallpaperTex();
+const texCeil = ceilingTex();
+
+/* ============================================================
+   关卡生成：房间 + 走廊 + 稀疏迷宫填充(节奏 = 紧走廊 ↔ 开阔大厅)
+   vw[c][j] 竖直边(沿Z)  hw[i][r] 水平边(沿X)  cellType 0=迷宫 1=房间 2=走廊
+   ============================================================ */
+const vw = Array.from({length:GW+1},()=>new Array(GH).fill(true));
+const hw = Array.from({length:GW},()=>new Array(GH+1).fill(true));
+const cellType = Array.from({length:GW},()=>new Array(GH).fill(0));
+const ROOM=1, CORR=2;
+function inb(i,j){ return i>=0&&i<GW&&j>=0&&j<GH; }
+function openBetween(i,j,ni,nj){            // 拆相邻两格之间的墙
+  if(ni===i+1) vw[i+1][j]=false; else if(ni===i-1) vw[i][j]=false;
+  else if(nj===j+1) hw[i][j+1]=false; else if(nj===j-1) hw[i][j]=false;
+}
+
+// 1) DFS 生成树:保证全图连通
+(function carve(){
+  const vis=Array.from({length:GW},()=>new Array(GH).fill(false));
+  const st=[[GW/2|0,GH/2|0]]; vis[GW/2|0][GH/2|0]=true;
+  const dirs=[[1,0],[-1,0],[0,1],[0,-1]];
+  while(st.length){
+    const [i,j]=st[st.length-1], opts=[];
+    for(const [di,dj] of dirs){ const ni=i+di,nj=j+dj; if(inb(ni,nj)&&!vis[ni][nj]) opts.push([ni,nj]); }
+    if(!opts.length){ st.pop(); continue; }
+    const [ni,nj]=opts[(rnd()*opts.length)|0];
+    openBetween(i,j,ni,nj); vis[ni][nj]=true; st.push([ni,nj]);
+  }
+})();
+
+// 2) 稀疏 braid(~22%):比原来紧,非房间区更像走廊/隔间
+for(let c=1;c<GW;c++)for(let j=0;j<GH;j++){ if(vw[c][j] && rnd()<0.22) vw[c][j]=false; }
+for(let i=0;i<GW;i++)for(let r=1;r<GH;r++){ if(hw[i][r] && rnd()<0.22) hw[i][r]=false; }
+
+// 3) 放房间:清内墙 + 标记 ROOM + 开门洞接入迷宫
+function cellCenter(i,j){ return new THREE.Vector3((i+0.5)*CELL - WORLD_W/2, 0, (j+0.5)*CELL - WORLD_H/2); }
+const rooms=[];
+function carveRoom(i0,j0,w,h){
+  for(let i=i0;i<i0+w;i++)for(let j=j0;j<j0+h;j++){ if(!inb(i,j)) continue;
+    cellType[i][j]=ROOM; if(i>i0) vw[i][j]=false; if(j>j0) hw[i][j]=false; }
+  const r={i0,j0,w,h,center:cellCenter(i0+((w-1)/2|0), j0+((h-1)/2|0))};
+  rooms.push(r); return r;
+}
+function roomFits(i0,j0,w,h,gap){
+  if(i0<1||j0<1||i0+w>GW-1||j0+h>GH-1) return false;
+  for(let i=i0-gap;i<i0+w+gap;i++)for(let j=j0-gap;j<j0+h+gap;j++)
+    if(inb(i,j)&&cellType[i][j]===ROOM) return false;
+  return true;
+}
+function placeRoom(w,h,tries){
+  for(let t=0;t<tries;t++){ const i0=1+(rnd()*(GW-w-2)|0), j0=1+(rnd()*(GH-h-2)|0);
+    if(roomFits(i0,j0,w,h,1)) return carveRoom(i0,j0,w,h); }
+  return null;
+}
+const glbRoom = placeRoom(8,8,80) || placeRoom(7,7,80) || carveRoom(2,2,8,8);  // GLB 原初房间(~27m,需大开间容纳)
+for(const [w,h] of [[7,6],[6,7],[6,5],[5,5],[4,5],[4,4],[4,4],[3,4],[3,3]]) placeRoom(w,h,40);
+for(const r of rooms){                                            // 每房开 ~3 门洞,防孤岛
+  const edges=[];
+  for(let i=r.i0;i<r.i0+r.w;i++){ edges.push(['N',i,r.j0],['S',i,r.j0+r.h-1]); }
+  for(let j=r.j0;j<r.j0+r.h;j++){ edges.push(['W',r.i0,j],['E',r.i0+r.w-1,j]); }
+  let doors=0,guard=0;
+  while(doors<3 && guard++<50){ const [d,i,j]=edges[(rnd()*edges.length)|0];
+    if(d==='N'&&j>0){ hw[i][j]=false; doors++; }
+    else if(d==='S'&&j<GH-1){ hw[i][j+1]=false; doors++; }
+    else if(d==='W'&&i>0){ vw[i][j]=false; doors++; }
+    else if(d==='E'&&i<GW-1){ vw[i+1][j]=false; doors++; } }
+}
+
+// 4) 凿走廊:1 格宽直/L 形通道,沿途拆墙,标记 CORR(不覆盖 ROOM)
+function corridor(i0,j0,i1,j1){
+  let i=i0,j=j0; if(cellType[i][j]!==ROOM) cellType[i][j]=CORR;
+  while(i!==i1){ const ni=i+Math.sign(i1-i); openBetween(i,j,ni,j); i=ni; if(cellType[i][j]!==ROOM) cellType[i][j]=CORR; }
+  while(j!==j1){ const nj=j+Math.sign(j1-j); openBetween(i,j,i,nj); j=nj; if(cellType[i][j]!==ROOM) cellType[i][j]=CORR; }
+}
+const rc=rooms.map(r=>({ci:(r.i0+r.w/2)|0, cj:(r.j0+r.h/2)|0})).sort((a,b)=>(a.ci+a.cj)-(b.ci+b.cj));
+for(let k=0;k<rc.length-1;k++) corridor(rc[k].ci,rc[k].cj, rc[k+1].ci,rc[k+1].cj);
+corridor(1, 4+(rnd()*(GH-8)|0), GW-2, 4+(rnd()*(GH-8)|0));        // 横贯长廊×2-3(参考图1)
+corridor(4+(rnd()*(GW-8)|0), 1, 4+(rnd()*(GW-8)|0), GH-2);
+if(rnd()<0.6) corridor(1, 4+(rnd()*(GH-8)|0), GW-2, 4+(rnd()*(GH-8)|0));
+
+// 5) GLB 中心 / 出生点 / 出口
+const specCenter = glbRoom.center.clone();
+let spawnRoom=glbRoom, sbest=Infinity;                            // 出生:最靠网格中心且非 GLB 房
+for(const r of rooms){ if(r===glbRoom) continue; const d=r.center.x*r.center.x+r.center.z*r.center.z; if(d<sbest){sbest=d;spawnRoom=r;} }
+const spawnCenter = spawnRoom.center.clone();
+// 出口已移除,世界封闭
+/* ---------- 门场景:① 密闭房间(门是唯一入口) ② 走廊尽头→大厅 ---------- */
+const doorSlots=[];
+const sCi=Math.max(0,Math.min(GW-1,(spawnCenter.x+WORLD_W/2)/CELL|0));
+const sCj=Math.max(0,Math.min(GH-1,(spawnCenter.z+WORLD_H/2)/CELL|0));
+function sealPerim(r){
+  for(let i=r.i0;i<r.i0+r.w;i++){ hw[i][r.j0]=true; hw[i][r.j0+r.h]=true; }
+  for(let j=r.j0;j<r.j0+r.h;j++){ vw[r.i0][j]=true; vw[r.i0+r.w][j]=true; }
+}
+function sideToward(r){ const rc=r.i0+r.w/2, rr=r.j0+r.h/2;
+  return (Math.abs(sCi-rc)>=Math.abs(sCj-rr)) ? (sCi<rc?'W':'E') : (sCj<rr?'N':'S'); }
+function doorOnSide(r, side){
+  const mi=r.i0+Math.floor(r.w/2), mj=r.j0+Math.floor(r.h/2);
+  if(side==='N'){ hw[mi][r.j0]=false;      return {axis:'H', line:r.j0*CELL-WORLD_H/2,       along:(mi+0.5)*CELL-WORLD_W/2, inward:+1, out:[mi,r.j0-1]}; }
+  if(side==='S'){ hw[mi][r.j0+r.h]=false;  return {axis:'H', line:(r.j0+r.h)*CELL-WORLD_H/2, along:(mi+0.5)*CELL-WORLD_W/2, inward:-1, out:[mi,r.j0+r.h]}; }
+  if(side==='W'){ vw[r.i0][mj]=false;      return {axis:'V', line:r.i0*CELL-WORLD_W/2,       along:(mj+0.5)*CELL-WORLD_H/2, inward:+1, out:[r.i0-1,mj]}; }
+                  vw[r.i0+r.w][mj]=false;  return {axis:'V', line:(r.i0+r.w)*CELL-WORLD_W/2, along:(mj+0.5)*CELL-WORLD_H/2, inward:-1, out:[r.i0+r.w,mj]};
+}
+const usedR=new Set([glbRoom,spawnRoom]);
+function pickRoom(pred){ for(const r of rooms){ if(usedR.has(r))continue; if(pred(r)){usedR.add(r);return r;} } return null; }
+// 泳池间已删除(精简):poolRoom 恒 null → 相关排除/封房/构建自动失效
+let poolRoom=null, poolDoorSide=null;
+function setupDoorRoom(r, url){
+  if(!r) return;
+  const side=sideToward(r);
+  const mi=r.i0+Math.floor(r.w/2), mj=r.j0+Math.floor(r.h/2);
+  let out; if(side==='N')out=[mi,r.j0-1]; else if(side==='S')out=[mi,r.j0+r.h]; else if(side==='W')out=[r.i0-1,mj]; else out=[r.i0+r.w,mj];
+  if(inb(out[0],out[1])) corridor(out[0],out[1], sCi,sCj);   // 先保证门外能通到出生点
+  sealPerim(r);                                              // 再把这间房四周封死
+  const d=doorOnSide(r, side); d.url=url;                    // 只留这一扇门
+  doorSlots.push(d);
+}
+setupDoorRoom(pickRoom(r=>r.w>=3&&r.h>=3&&r.w<=5&&r.h<=5) || pickRoom(()=>true), 'assets/door_classroom.glb');            // ① 密闭房间
+setupDoorRoom(pickRoom(r=>r.w>=6||r.h>=6) || pickRoom(r=>r.w>=5||r.h>=5) || pickRoom(()=>true), 'assets/double_door.glb');  // ② 大厅
+// 出口门:离入口最远的房间,封成独立门房,其门 = 逃生出口(带绿色 EXIT 灯牌,开门即逃脱)
+{ let exitRoom=null, exBest=-1;
+  for(const r of rooms){ if(usedR.has(r)) continue; const d=(r.center.x-INTRO_X)**2+(r.center.z-INTRO_ZC)**2; if(d>exBest){ exBest=d; exitRoom=r; } }
+  if(!exitRoom) exitRoom=rooms.find(r=>r!==spawnRoom)||rooms[0];
+  if(exitRoom){ usedR.add(exitRoom); setupDoorRoom(exitRoom,'assets/door_classroom.glb'); doorSlots[doorSlots.length-1].isExit=true; }
+}
+if(hw[INTRO_CI]) hw[INTRO_CI][0]=false;   // 开场走廊接入迷宫的北边界缺口
+
+/* ---------- 由边构建墙体 AABB + InstancedMesh ---------- */
+const wallAABBs=[];                 // {minX,maxX,minZ,maxZ}
+const grid = new Map();             // 空间散列: "ci,cj" -> [aabb...]
+function gkey(ci,cj){ return ci+','+cj; }
+function addAABB(a){ wallAABBs.push(a);
+  const ci0=Math.floor((a.minX+WORLD_W/2)/CELL), ci1=Math.floor((a.maxX+WORLD_W/2)/CELL);
+  const cj0=Math.floor((a.minZ+WORLD_H/2)/CELL), cj1=Math.floor((a.maxZ+WORLD_H/2)/CELL);
+  for(let ci=ci0;ci<=ci1;ci++)for(let cj=cj0;cj<=cj1;cj++){
+    const k=gkey(ci,cj); if(!grid.has(k)) grid.set(k,[]); grid.get(k).push(a); }
+  return a;
+}
+
+const vList=[], hList=[];
+for(let c=0;c<=GW;c++)for(let j=0;j<GH;j++){ if(vw[c][j]){
+  const x=c*CELL-WORLD_W/2, z=(j+0.5)*CELL-WORLD_H/2;
+  vList.push([x,z]); addAABB({minX:x-WALL_T/2,maxX:x+WALL_T/2,minZ:z-CELL/2,maxZ:z+CELL/2}); }}
+for(let i=0;i<GW;i++)for(let r=0;r<=GH;r++){ if(hw[i][r]){
+  const x=(i+0.5)*CELL-WORLD_W/2, z=r*CELL-WORLD_H/2;
+  hList.push([x,z]); addAABB({minX:x-CELL/2,maxX:x+CELL/2,minZ:z-WALL_T/2,maxZ:z+WALL_T/2}); }}
+
+/* ---------- 墙纸材质:backrooms_wallpapers (1).glb,选用 3 款按地区分配 ---------- */
+// 对应用户给的 3 个球:wp_2=灰底chevron / wp_9=金底chevron / wp_4=竖条纹
+const WP=['wp_2','wp_9','wp_4'];
+const wpLoader=new THREE.TextureLoader();
+const wallMats=WP.map(n=>{
+  const m=new THREE.MeshStandardMaterial({ color:0xb0a24c, roughness:0.96, metalness:0.0 }); // 回退色
+  wpLoader.load('assets/wallpapers/'+n+'.jpg', t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; m.map=t; m.color.set(0xffffff); m.needsUpdate=true; });
+  return m;
+});
+const NWP=wallMats.length;
+function randWallMat(){ return wallMats[(rnd()*NWP)|0]; }
+
+// 「地区」墙纸:整片区域用同一种,区域之间才换(连贯、更瘆人)
+const REGION=6;                                    // 每 6 格 ≈ 21m 一个地区
+const regNI=Math.ceil(GW/REGION), regNJ=Math.ceil(GH/REGION);
+const regionWP=[]; { let prev=-1;
+  for(let a=0;a<regNI;a++){ regionWP.push([]);
+    for(let b=0;b<regNJ;b++){ let k=(rnd()*NWP)|0; if(k===prev) k=(k+1+((rnd()*(NWP-1))|0))%NWP; regionWP[a].push(k); prev=k; } } }
+function wpIndexAt(x,z){
+  const ci=Math.max(0,Math.min(GW-1,Math.floor((x+WORLD_W/2)/CELL)));
+  const cj=Math.max(0,Math.min(GH-1,Math.floor((z+WORLD_H/2)/CELL)));
+  return regionWP[(ci/REGION)|0][(cj/REGION)|0];
+}
+
+function scaleUV(geo, ru, rv){ const uv=geo.attributes.uv; for(let i=0;i<uv.count;i++){ uv.setXY(i, uv.getX(i)*ru, uv.getY(i)*rv);} uv.needsUpdate=true; }
+const vGeo=new THREE.BoxGeometry(WALL_T, WALL_H, CELL); scaleUV(vGeo, 8, 6);  // 竖墙:密铺(整数→跨段无缝)
+const hGeo=new THREE.BoxGeometry(CELL, WALL_H, WALL_T); scaleUV(hGeo, 8, 6);  // 横墙
+const dummy=new THREE.Object3D();
+
+// 按「地区墙纸」分桶,每种墙纸一个 InstancedMesh(同地区一致)
+function buildWalls(list, geo){
+  const buckets=Array.from({length:NWP},()=>[]);
+  for(const w of list) buckets[wpIndexAt(w[0],w[1])].push(w);
+  buckets.forEach((arr,bi)=>{ if(!arr.length) return;
+    const mesh=new THREE.InstancedMesh(geo, wallMats[bi], arr.length);
+    arr.forEach(([x,z],i)=>{ dummy.position.set(x,WALL_H/2,z); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix); });
+    mesh.instanceMatrix.needsUpdate=true; scene.add(mesh);
+  });
+}
+buildWalls(vList, vGeo);
+buildWalls(hList, hGeo);
+
+/* ---------- 踢脚线(木色,沿每段墙底,参考图) ---------- */
+{
+  const baseMat=new THREE.MeshStandardMaterial({ color:0x6b4a2c, roughness:0.7 });
+  const BH=0.14;                                     // 踢脚线高
+  const vB=new THREE.BoxGeometry(WALL_T+0.05, BH, CELL);
+  const hB=new THREE.BoxGeometry(CELL, BH, WALL_T+0.05);
+  const vbm=new THREE.InstancedMesh(vB, baseMat, Math.max(1,vList.length));
+  const hbm=new THREE.InstancedMesh(hB, baseMat, Math.max(1,hList.length));
+  vList.forEach(([x,z],i)=>{ dummy.position.set(x,BH/2,z); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); vbm.setMatrixAt(i,dummy.matrix); });
+  hList.forEach(([x,z],i)=>{ dummy.position.set(x,BH/2,z); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); hbm.setMatrixAt(i,dummy.matrix); });
+  vbm.instanceMatrix.needsUpdate=hbm.instanceMatrix.needsUpdate=true;
+  scene.add(vbm,hbm);
+}
+
+/* ---------- 独立立柱:大房间里的方柱(后室灵魂,参考图2/图4) ---------- */
+const pillarPositions=[];
+for(const r of rooms){
+  if(r===spawnRoom || r.w<4 || r.h<4) continue;   // 出生房 & 小房不放柱(旧房间/泳池间已删除)
+  for(let i=r.i0+1;i<r.i0+r.w-1;i+=2)for(let j=r.j0+1;j<r.j0+r.h-1;j+=2)
+    pillarPositions.push(cellCenter(i,j));
+}
+if(pillarPositions.length){
+  const PILLAR_S=0.7;
+  const pillarGeo=new THREE.BoxGeometry(PILLAR_S, WALL_H, PILLAR_S); scaleUV(pillarGeo,2,6);
+  const pb=Array.from({length:NWP},()=>[]);
+  for(const p of pillarPositions) pb[wpIndexAt(p.x,p.z)].push(p);   // 按地区墙纸分桶
+  pb.forEach((arr,bi)=>{ if(!arr.length) return;
+    const mesh=new THREE.InstancedMesh(pillarGeo, wallMats[bi], arr.length);
+    arr.forEach((p,i)=>{ dummy.position.set(p.x,WALL_H/2,p.z); dummy.rotation.set(0,0,0); dummy.scale.set(1,1,1); dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix); });
+    mesh.instanceMatrix.needsUpdate=true; scene.add(mesh);
+  });
+  for(const p of pillarPositions) addAABB({minX:p.x-PILLAR_S/2,maxX:p.x+PILLAR_S/2,minZ:p.z-PILLAR_S/2,maxZ:p.z+PILLAR_S/2});
+}
+
+/* ---------- 墙体多样化:房间内 全高/半高/矮 隔断 + 木压条(参考图2) ---------- */
+const PART=[];
+function partH(){ const r=rnd(); return r<0.30?WALL_H : (r<0.68?1.35:0.85); }  // 全高/半高/矮
+for(const r of rooms){
+  if(r===spawnRoom) continue;
+  for(let i=r.i0;i<r.i0+r.w;i++)for(let j=r.j0;j<r.j0+r.h;j++){
+    if(i>r.i0 && rnd()<0.09) PART.push({x:i*CELL-WORLD_W/2, z:(j+0.5)*CELL-WORLD_H/2, horiz:false, h:partH()});
+    if(j>r.j0 && rnd()<0.09) PART.push({x:(i+0.5)*CELL-WORLD_W/2, z:j*CELL-WORLD_H/2, horiz:true, h:partH()});
+  }
+}
+if(PART.length){
+  const partGeo=new THREE.BoxGeometry(WALL_T,1,CELL); scaleUV(partGeo,8,4);  // 单位高,按实例Y缩放
+  const pb=Array.from({length:NWP},()=>[]);
+  for(const p of PART) pb[wpIndexAt(p.x,p.z)].push(p);                       // 按地区墙纸分桶
+  pb.forEach((arr,bi)=>{ if(!arr.length) return;
+    const mesh=new THREE.InstancedMesh(partGeo, wallMats[bi], arr.length);
+    arr.forEach((p,i)=>{ dummy.scale.set(1,p.h,1); dummy.rotation.set(0,p.horiz?Math.PI/2:0,0); dummy.position.set(p.x,p.h/2,p.z); dummy.updateMatrix(); mesh.setMatrixAt(i,dummy.matrix); });
+    mesh.instanceMatrix.needsUpdate=true; scene.add(mesh);
+  });
+  // 木压条(半高/矮墙顶)统一一个 mesh
+  const capList=PART.filter(p=>p.h<WALL_H);
+  if(capList.length){
+    const capMat=new THREE.MeshStandardMaterial({ color:0x3a2c18, roughness:0.6 });
+    const capGeo=new THREE.BoxGeometry(WALL_T+0.06,0.08,CELL);
+    const capMesh=new THREE.InstancedMesh(capGeo, capMat, capList.length);
+    capList.forEach((p,i)=>{ dummy.scale.set(1,1,1); dummy.rotation.set(0,p.horiz?Math.PI/2:0,0); dummy.position.set(p.x,p.h+0.04,p.z); dummy.updateMatrix(); capMesh.setMatrixAt(i,dummy.matrix); });
+    capMesh.instanceMatrix.needsUpdate=true; scene.add(capMesh);
+  }
+  dummy.scale.set(1,1,1); dummy.rotation.set(0,0,0);
+  for(const p of PART){ if(p.horiz) addAABB({minX:p.x-CELL/2,maxX:p.x+CELL/2,minZ:p.z-WALL_T/2,maxZ:p.z+WALL_T/2});
+    else addAABB({minX:p.x-WALL_T/2,maxX:p.x+WALL_T/2,minZ:p.z-CELL/2,maxZ:p.z+CELL/2}); }
+}
+
+/* ---------- 地板 / 天花板 ---------- */
+// 地板：真实 PBR 布料材质 Fabric025 (ambientCG)。先给回退地毯色(贴图慢/失败也不会黑屏),
+// 贴图异步加载好再套上;URL 加 ?v 破浏览器缓存(修复"地毯没加载")
+const floorMat=new THREE.MeshStandardMaterial({ color:0x9a8b4f, roughness:1.0, metalness:0.0 });
+const floorTexLoader=new THREE.TextureLoader();
+function loadFloorMap(slot, url, srgb){
+  floorTexLoader.load(url, t=>{
+    t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(WORLD_W/2.2, WORLD_H/2.2); t.anisotropy=8;
+    if(srgb) t.colorSpace=THREE.SRGBColorSpace;
+    floorMat[slot]=t; if(slot==='map') floorMat.color.set(0xffffff); // 有颜色图后取消回退色染色
+    floorMat.needsUpdate=true;
+  }, undefined, err=>{ console.warn('地板贴图加载失败,保留回退色:', url, err); });
+}
+loadFloorMap('map',          'assets/fabric028_color.jpg',  true);
+loadFloorMap('normalMap',    'assets/fabric028_normal.jpg', false);
+loadFloorMap('roughnessMap', 'assets/fabric028_rough.jpg',  false);
+const floor=new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W,WORLD_H), floorMat);
+floor.rotation.x=-Math.PI/2; scene.add(floor);
+
+const ceilMat=new THREE.MeshStandardMaterial({ map:texCeil, roughness:0.9 });
+texCeil.repeat.set(WORLD_W/1.2, WORLD_H/1.2);
+const ceil=new THREE.Mesh(new THREE.PlaneGeometry(WORLD_W,WORLD_H), ceilMat);
+ceil.rotation.x=Math.PI/2; ceil.position.y=WALL_H; scene.add(ceil);
+
+/* ---------- 天花板方形通风口(同心方形扩散器,参考图3) ---------- */
+function ventTex(){
+  const s=128,c=mkCanvas(s),x=c.getContext('2d');
+  x.fillStyle='#bdb896'; x.fillRect(0,0,s,s);
+  x.strokeStyle='#6e6a4f'; x.lineWidth=3;
+  for(let k=0;k<5;k++){ const m=8+k*11; x.strokeRect(m,m,s-2*m,s-2*m); }
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; return t;
+}
+const ventMat=new THREE.MeshStandardMaterial({ map:ventTex(), roughness:0.85 });
+const ventGeo=new THREE.PlaneGeometry(0.72,0.72);
+for(let placed=0,tries=0; tries<500 && placed<16; tries++){
+  const i=(rnd()*GW)|0, j=(rnd()*GH)|0, cc=cellCenter(i,j);
+  const v=new THREE.Mesh(ventGeo,ventMat); v.rotation.x=Math.PI/2; v.position.set(cc.x, WALL_H-0.012, cc.z);
+  scene.add(v); placed++;
+}
+
+/* ---------- 荧光顶灯：发光面板 + 闪烁(灯跟着空间走) ---------- */
+const panelGeo=new THREE.PlaneGeometry(CELL*0.5, CELL*0.16);
+const panelMat=new THREE.MeshBasicMaterial({ color:0xfff6d0, fog:true });
+const panels=[]; const panelPositions=[];
+function addPanel(i,j){
+  const cc=cellCenter(i,j);
+  const p=new THREE.Mesh(panelGeo, panelMat.clone());
+  p.rotation.x=Math.PI/2; p.position.set(cc.x, WALL_H-0.02, cc.z);
+  p.userData.base=0.9+rnd()*0.1; p.userData.flick=rnd()<0.22;
+  scene.add(p); p.userData.on=true; panels.push(p); panelPositions.push(p);
+}
+const inPoolRoom=(i,j)=>poolRoom&&i>=poolRoom.i0&&i<poolRoom.i0+poolRoom.w&&j>=poolRoom.j0&&j<poolRoom.j0+poolRoom.h;
+for(let i=0;i<GW;i++)for(let j=0;j<GH;j++){
+  if(inPoolRoom(i,j)) continue;                              // 泳池间用自己的冷光,不放暖黄板
+  const t=cellType[i][j];
+  if(t===CORR){ if((i+j)%2===0) addPanel(i,j); }             // 走廊:棋盘间隔,不连成一整排
+  else if(t===ROOM){ if(i%2===1 && j%2===1) addPanel(i,j); } // 房间:隔格网格
+  else if(i%2===1 && j%2===1 && rnd()<0.5) addPanel(i,j);    // 迷宫填充:稀疏
+}
+// 少量动态点光源：跟随玩家最近的几盏，制造局部明暗
+const dynLights=[];
+for(let k=0;k<10;k++){ const L=new THREE.PointLight(0xdcecff, 0.0, CELL*4.4, 2.0); scene.add(L); dynLights.push(L); }  // 冷白荧光:亮灯下发凉,与暖黄环境形成温差
+const introFlickers=[];   // 开场走廊 2 盏忽闪忽灭的灯(恐怖氛围)
+
+/* 出口/EXIT 已移除(改用真实门模型嵌墙) */
+
+/* ============================================================
+   特殊房间：真实 GLB「原初房间」
+   ============================================================ */
+const meshColliders=[];          // (保留空,兼容 collideGLB 的空判定)
+let glbRegion=null;              // 已删除「真实旧房间」→ 恒 null,collideGLB/提示自动失效
+const loadbar=document.querySelector('#loadbar i');
+window.__glbLoaded=true;         // 精简:不再加载 original_backrooms.glb
+
+/* ============================================================
+   真实门模型:放进门洞 + 四周补墙(和墙连成一体,非悬空)
+   ============================================================ */
+const doorLoader=new GLTFLoader();
+window.__doors=[]; const doors=[]; window.__doorObjs=doors;
+function wallFiller(mat, w, h, cx, cy, cz, axis, noCol){   // 门洞四周补墙(门楣 noCol=不挡路)
+  const geo = axis==='H' ? new THREE.BoxGeometry(w,h,WALL_T) : new THREE.BoxGeometry(WALL_T,h,w);
+  scaleUV(geo, Math.max(1,Math.round(8*w/CELL)), Math.max(1,Math.round(6*h/WALL_H)));
+  const m=new THREE.Mesh(geo, mat); m.position.set(cx,cy,cz); scene.add(m);
+  if(noCol) return;
+  if(axis==='H') addAABB({minX:cx-w/2,maxX:cx+w/2,minZ:cz-WALL_T/2,maxZ:cz+WALL_T/2});
+  else           addAABB({minX:cx-WALL_T/2,maxX:cx+WALL_T/2,minZ:cz-w/2,maxZ:cz+w/2});
+}
+function findTwoLeaves(root){   // 找门的左右两扇叶子节点
+  const by={}; root.traverse(o=>{ if(o.name) by[o.name]=o; });
+  const pairs=[['L','R'],['01','02'],['left','right'],['Left','Right'],['Door_L','Door_R'],['DoorL','DoorR']];
+  for(const [a,b] of pairs){ if(by[a]&&by[b]) return [by[a],by[b]]; }
+  return null;
+}
+function registerDoor(root, cx, cz, dw, axis, inward, aabb){   // 登记门:两扇从中间对开(找不到叶子则整体摆开)
+  window.__doors.push(root);
+  const two=findTwoLeaves(root), parts=[];
+  if(two){
+    two.forEach(node=>{
+      node.updateMatrixWorld(true);
+      const bc=new THREE.Box3().setFromObject(node).getCenter(new THREE.Vector3());
+      const side=((axis==='H'?bc.x:bc.z) < (axis==='H'?cx:cz)) ? -1 : 1;      // -1 左, +1 右
+      const hx=axis==='H'?(cx+side*dw/2):cx, hz=axis==='H'?cz:(cz+side*dw/2);  // 铰链在外侧边
+      const pv=new THREE.Group(); pv.position.set(hx,0,hz); scene.add(pv); pv.attach(node);
+      parts.push({pivot:pv, openA: side*inward*Math.PI*0.5});                 // 两扇反向对开
+    });
+  } else {   // 无命名叶子(如消防门):克隆两份各裁一半,从中间对开
+    renderer.localClippingEnabled=true;
+    [-1,1].forEach(side=>{
+      const leaf=root.clone(true);
+      leaf.traverse(o=>{ if(o.isMesh && o.material){ o.material=Array.isArray(o.material)?o.material.map(m=>m.clone()):o.material.clone(); } });
+      const hx=axis==='H'?(cx+side*dw/2):cx, hz=axis==='H'?cz:(cz+side*dw/2);
+      const pv=new THREE.Group(); pv.position.set(hx,0,hz); scene.add(pv); pv.attach(leaf);
+      const local=new THREE.Plane(axis==='H'?new THREE.Vector3(side,0,0):new THREE.Vector3(0,0,side), dw/2);  // 只留铰链到中线这半
+      const world=new THREE.Plane(); pv.updateWorldMatrix(true,false); world.copy(local).applyMatrix4(pv.matrixWorld);
+      leaf.traverse(o=>{ if(o.isMesh){ (Array.isArray(o.material)?o.material:[o.material]).forEach(m=>{ m.clippingPlanes=[world]; m.side=THREE.DoubleSide; }); } });
+      parts.push({pivot:pv, openA:side*inward*Math.PI*0.5, clipLocal:local, clipWorld:world});
+    });
+    root.visible=false;
+  }
+  doors.push({parts, cx, cz, aabb, open:false, animating:false});
+  (window.__doorAt=window.__doorAt||[]).push({x:cx,z:cz,axis});
+}
+function makeExitSign(px, pz, axis, inward){   // 出口门上方绿色 EXIT 灯牌,朝玩家接近侧
+  const sc=mkCanvas(256); sc.height=112; const sx=sc.getContext('2d');
+  sx.fillStyle='#06220d'; sx.fillRect(0,0,256,112);
+  let ry, ox=0, oz=0, mirror=false;
+  if(axis==='H'){ if(inward>0){ ry=Math.PI; oz=-0.15; } else { ry=0; oz=0.15; mirror=true; } }
+  else          { if(inward>0){ ry=-Math.PI/2; ox=-0.15; mirror=true; } else { ry=Math.PI/2; ox=0.15; } }
+  sx.save(); if(mirror){ sx.translate(256,0); sx.scale(-1,1); }
+  sx.fillStyle='#7dff96'; sx.font='bold 78px Arial,sans-serif'; sx.textAlign='center'; sx.textBaseline='middle';
+  sx.shadowColor='#7dff96'; sx.shadowBlur=22; sx.fillText('EXIT',128,60); sx.restore();
+  const tex=new THREE.CanvasTexture(sc); tex.colorSpace=THREE.SRGBColorSpace;
+  const sg=new THREE.Mesh(new THREE.PlaneGeometry(1.15,0.5), new THREE.MeshBasicMaterial({map:tex,fog:true}));
+  sg.position.set(px+ox, 2.45, pz+oz); sg.rotation.y=ry; scene.add(sg);
+}
+function embedDoor(slot){
+  const mat = wallMats[wpIndexAt(slot.along, slot.line)] || wallMats[0];
+  doorLoader.load(slot.url,(gltf)=>{
+    const root=gltf.scene;
+    const DH=2.3;                                              // 门高(上方留门楣)
+    let b=new THREE.Box3().setFromObject(root), s=new THREE.Vector3(); b.getSize(s);
+    root.scale.setScalar(DH/s.y);
+    b=new THREE.Box3().setFromObject(root); b.getSize(s);
+    const widthAlongX=s.x>=s.z;
+    if(slot.axis==='H' && !widthAlongX) root.rotation.y=Math.PI/2; // 门宽沿墙走向
+    if(slot.axis==='V' &&  widthAlongX) root.rotation.y=Math.PI/2;
+    root.updateMatrixWorld(true);
+    b=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); b.getCenter(c); b.getSize(s);
+    const dw=(slot.axis==='H')?s.x:s.z;                        // 门宽(沿墙)
+    let px,pz;
+    if(slot.axis==='H'){ px=slot.along; pz=slot.line; } else { pz=slot.along; px=slot.line; } // 居中放门洞(墙线上)
+    root.position.x += px-c.x; root.position.z += pz-c.z; root.position.y += -b.min.y;
+    root.traverse(o=>{ if(o.isMesh){ const ms=Array.isArray(o.material)?o.material:[o.material]; ms.forEach(mm=>{ if(mm){ mm.fog=true; mm.side=THREE.DoubleSide; if(mm.metalness!==undefined) mm.metalness=Math.min(mm.metalness,0.2); } }); } });
+    scene.add(root); window.__doors.push(root);
+    // 四周补墙:把 CELL 洞口除门以外补齐,和相邻墙连成一片
+    const sideW=(CELL-dw)/2, headH=WALL_H-DH;
+    if(slot.axis==='H'){
+      if(sideW>0.02){ wallFiller(mat, sideW, WALL_H, px-dw/2-sideW/2, WALL_H/2, pz,'H');
+                      wallFiller(mat, sideW, WALL_H, px+dw/2+sideW/2, WALL_H/2, pz,'H'); }
+      if(headH>0.02)  wallFiller(mat, dw, headH, px, DH+headH/2, pz,'H', true);
+    } else {
+      if(sideW>0.02){ wallFiller(mat, sideW, WALL_H, px, WALL_H/2, pz-dw/2-sideW/2,'V');
+                      wallFiller(mat, sideW, WALL_H, px, WALL_H/2, pz+dw/2+sideW/2,'V'); }
+      if(headH>0.02)  wallFiller(mat, dw, headH, px, DH+headH/2, pz,'V', true);
+    }
+    const fb=new THREE.Box3().setFromObject(root);            // 门碰撞(开门时禁用→可穿过)
+    const aabb=addAABB({minX:fb.min.x,maxX:fb.max.x,minZ:fb.min.z,maxZ:fb.max.z});
+    registerDoor(root, px, pz, dw, slot.axis, slot.inward, aabb);   // 两扇从中间对开
+    if(slot.isExit){ doors[doors.length-1].isExit=true; window.__exitAt={x:px,z:pz}; makeExitSign(px,pz,slot.axis,slot.inward); }
+  }, undefined, e=>console.warn('door fail',slot.url,e));
+}
+function spawnDoor(url, cx, cz, axis, inward, targetH, fill, flip){   // 世界坐标放门+可选四周补墙
+  doorLoader.load(url,(gltf)=>{
+    const root=gltf.scene;
+    let b=new THREE.Box3().setFromObject(root), s=new THREE.Vector3(); b.getSize(s);
+    root.scale.setScalar(targetH/s.y);
+    b=new THREE.Box3().setFromObject(root); b.getSize(s);
+    const widthAlongX=s.x>=s.z;
+    if(axis==='H' && !widthAlongX) root.rotation.y=Math.PI/2;
+    if(axis==='V' &&  widthAlongX) root.rotation.y=Math.PI/2;
+    if(flip) root.rotation.y+=Math.PI;   // 翻正面朝向玩家
+    root.updateMatrixWorld(true);
+    b=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); b.getCenter(c); b.getSize(s);
+    const dw=(axis==='H')?s.x:s.z, dh=s.y;
+    root.position.x+=cx-c.x; root.position.z+=cz-c.z; root.position.y+=-b.min.y;
+    root.traverse(o=>{ if(o.isMesh){ const ms=Array.isArray(o.material)?o.material:[o.material]; ms.forEach(mm=>{ if(mm){ mm.fog=true; mm.side=THREE.DoubleSide; if(mm.metalness!==undefined) mm.metalness=Math.min(mm.metalness,0.2); } });
+      // 门模型自带的「深色背衬板」(如消防门 Object_15,无贴图纯深色大面片 → 原本渲染成黑墙):
+      // 改成不透明的消防门灰,并加微弱自发光,保证任何光照下都不会黑,门也不透
+      const m0=ms[0];
+      if(m0&&m0.color&&!m0.map){ const lum=m0.color.r+m0.color.g+m0.color.b;
+        const wb=new THREE.Box3().setFromObject(o), ws=new THREE.Vector3(); wb.getSize(ws);
+        if(lum<0.28 && Math.max(ws.x,ws.y,ws.z)>1.2 && Math.min(ws.x,ws.y,ws.z)<0.35){
+          m0.color.set(0x7c7a70); if(m0.emissive) m0.emissive.set(0x0d0d0b); m0.needsUpdate=true;
+        }
+      }
+    } });
+    scene.add(root);
+    const fb=new THREE.Box3().setFromObject(root);
+    const aabb=addAABB({minX:fb.min.x,maxX:fb.max.x,minZ:fb.min.z,maxZ:fb.max.z});
+    registerDoor(root, cx, cz, dw, axis, inward, aabb);
+    if(fill){ const m=fill.mat, sideW=(fill.w-dw)/2, headH=WALL_H-dh;
+      const mk=(w,h,d,x,y,z,noCol)=>{ const g=new THREE.BoxGeometry(w,h,d); scaleUV(g,Math.max(1,Math.round(8*Math.max(w,d)/CELL)),Math.max(1,Math.round(6*h/WALL_H))); const mm=new THREE.Mesh(g,m); mm.position.set(x,y,z); scene.add(mm); if(!noCol) addAABB({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2}); };
+      if(axis==='H'){ if(sideW>0.02){ mk(sideW,WALL_H,WALL_T,cx-dw/2-sideW/2,WALL_H/2,cz); mk(sideW,WALL_H,WALL_T,cx+dw/2+sideW/2,WALL_H/2,cz); } if(headH>0.02) mk(dw,headH,WALL_T,cx,dh+headH/2,cz,true); }
+      else { if(sideW>0.02){ mk(WALL_T,WALL_H,sideW,cx,WALL_H/2,cz-dw/2-sideW/2); mk(WALL_T,WALL_H,sideW,cx,WALL_H/2,cz+dw/2+sideW/2); } if(headH>0.02) mk(WALL_T,headH,dw,cx,dh+headH/2,cz,true); }
+    }
+  }, undefined, e=>console.warn('spawnDoor fail',url,e));
+}
+function placeSign(url, x,y,z, yaw, targetW){
+  doorLoader.load(url,(g)=>{ const r=g.scene; let b=new THREE.Box3().setFromObject(r), s=new THREE.Vector3(); b.getSize(s);
+    r.scale.setScalar(targetW/Math.max(s.x,s.z,0.05)); r.rotation.y=yaw; r.updateMatrixWorld(true);
+    b=new THREE.Box3().setFromObject(r); const c=new THREE.Vector3(); b.getCenter(c);
+    r.position.set(x-c.x, y-c.y, z-c.z);
+    r.traverse(o=>{ if(o.isMesh){ (Array.isArray(o.material)?o.material:[o.material]).forEach(mm=>{ if(mm){ mm.fog=true; mm.side=THREE.DoubleSide; if(mm.emissive){ mm.emissive.set(0xffffff); mm.emissiveIntensity=0.9; if(mm.map) mm.emissiveMap=mm.map; } mm.needsUpdate=true; } }); } });
+    scene.add(r);
+  }, undefined, e=>console.warn('sign fail',url,e));
+}
+doorSlots.forEach(embedDoor);
+
+/* ============================================================
+   开场序列几何:出生房(单一墙纸)→ 暗走廊 → 尽头逃生门 → 迷宫
+   ============================================================ */
+{
+  const X=INTRO_X, H=WALL_H, T=WALL_T, Wr=INTRO_Wr, Dr=INTRO_Dr, Lc=INTRO_Lc, Wc=CELL;
+  const zMaze=INTRO_ZC, zCorrN=INTRO_zCorrN, zRoomN=INTRO_zRoomN;
+  const introMat=new THREE.MeshStandardMaterial({ color:0xb0a24c, roughness:0.96 });   // 单一墙纸
+  new THREE.TextureLoader().load('assets/wallpapers/wp_9.jpg', t=>{ t.wrapS=t.wrapT=THREE.RepeatWrapping; t.colorSpace=THREE.SRGBColorSpace; t.anisotropy=8; introMat.map=t; introMat.color.set(0xffffff); introMat.needsUpdate=true; });
+  const iw=Wr+0.5, il=Lc+Dr+0.5, zc=(zRoomN+zMaze)/2;
+  const fT=new THREE.TextureLoader().load('assets/fabric028_color.jpg'); fT.wrapS=fT.wrapT=THREE.RepeatWrapping; fT.colorSpace=THREE.SRGBColorSpace; fT.anisotropy=8; fT.repeat.set(iw/2.2,il/2.2);
+  const cT=ceilingTex(); cT.repeat.set(iw/1.2,il/1.2);
+  const fp=new THREE.Mesh(new THREE.PlaneGeometry(iw,il), new THREE.MeshStandardMaterial({map:fT,roughness:1.0})); fp.rotation.x=-Math.PI/2; fp.position.set(X,0.002,zc); scene.add(fp);
+  const cp=new THREE.Mesh(new THREE.PlaneGeometry(iw,il), new THREE.MeshStandardMaterial({map:cT,roughness:0.9})); cp.rotation.x=Math.PI/2; cp.position.set(X,H-0.002,zc); scene.add(cp);
+  const W=(w,d,x,z)=>{ const g=new THREE.BoxGeometry(w,H,d); scaleUV(g,Math.max(1,Math.round(8*Math.max(w,d)/CELL)),6); const m=new THREE.Mesh(g,introMat); m.position.set(x,H/2,z); scene.add(m); addAABB({minX:x-w/2,maxX:x+w/2,minZ:z-d/2,maxZ:z+d/2}); };
+  W(Wr+T, T, X, zRoomN);                                    // 房间北墙
+  W(T, Dr, X-Wr/2, (zRoomN+zCorrN)/2);                      // 房间西墙
+  W(T, Dr, X+Wr/2, (zRoomN+zCorrN)/2);                      // 房间东墙
+  W(T, Lc, X-Wc/2, (zCorrN+zMaze)/2);                       // 走廊西墙
+  W(T, Lc, X+Wc/2, (zCorrN+zMaze)/2);                       // 走廊东墙
+  const ip=(x,z,col)=>{ const p=new THREE.Mesh(new THREE.PlaneGeometry(CELL*0.5,CELL*0.16), new THREE.MeshBasicMaterial({color:col,fog:true})); p.rotation.x=Math.PI/2; p.position.set(x,H-0.02,z); scene.add(p); return p; };
+  ip(X, zRoomN+Dr*0.5, 0xfff2d0);                           // 房间灯(亮)
+  // 走廊 2 盏忽闪忽灭的灯:面板 + 真实投射点光,烘托恐怖氛围
+  [0.32, 0.72].forEach((f,idx)=>{
+    const z=zCorrN + Lc*f;
+    const panel=ip(X, z, 0x14130d);                         // 初始暗(灭)
+    const L=new THREE.PointLight(0xfff0d0, 0.0, Lc*0.8, 2.0); L.position.set(X, H-0.2, z); scene.add(L);
+    introFlickers.push({ panel, light:L, base:0xfff2d0, cur:0, on:false, t:0.1+idx*0.3 });
+  });
+  spawnDoor('assets/door_classroom.glb', X, zCorrN, 'H', 1, 2.05, {w:Wr, mat:introMat});  // EXIT 门(南墙,朝走廊)
+  { // EXIT 绿色发光灯牌(朝房间;画布预镜像以配合 rotation.y=π 正读)
+    const sc=mkCanvas(256); sc.height=112; const sx=sc.getContext('2d');
+    sx.fillStyle='#08240f'; sx.fillRect(0,0,256,112);
+    sx.fillStyle='#84ff99'; sx.font='bold 78px Arial,sans-serif'; sx.textAlign='center'; sx.textBaseline='middle';
+    sx.shadowColor='#84ff99'; sx.shadowBlur=20; sx.fillText('EXIT',128,60);
+    const tex=new THREE.CanvasTexture(sc); tex.colorSpace=THREE.SRGBColorSpace;
+    const sg=new THREE.Mesh(new THREE.PlaneGeometry(1.05,0.46), new THREE.MeshBasicMaterial({map:tex,fog:true}));
+    sg.position.set(X, 2.42, zCorrN-0.13); sg.rotation.y=Math.PI; scene.add(sg);
+  }
+  spawnDoor('assets/fire_escape_doors.glb', X, zMaze, 'H', +1, 2.12, {w:Wc, mat:introMat}, true); // 走廊尽头逃生门(翻正面朝走廊)
+}
+
+/* ============================================================
+   音频：荧光电流嗡鸣 + 脚步 (WebAudio 合成，无外部资源)
+   ============================================================ */
+let audio=null;
+function initAudio(){
+  if(audio) return;
+  const ctx=new (window.AudioContext||window.webkitAudioContext)();
+  const master=ctx.createGain(); master.gain.value=0.0; master.connect(ctx.destination);
+  // 电流嗡鸣：120Hz + 60Hz 微失谐 + 高频微咝
+  const hum=ctx.createGain(); hum.gain.value=0.08; hum.connect(master);
+  [60,120,179].forEach((f,i)=>{ const o=ctx.createOscillator(); o.type=i===2?'triangle':'sawtooth'; o.frequency.value=f;
+    const g=ctx.createGain(); g.gain.value=i===2?0.06:0.5/(i+1); o.connect(g); g.connect(hum); o.start(); });
+  // 高频嘶嘶(荧光)
+  const noiseBuf=ctx.createBuffer(1, ctx.sampleRate*2, ctx.sampleRate);
+  const nd=noiseBuf.getChannelData(0); for(let i=0;i<nd.length;i++) nd[i]=(Math.random()*2-1);
+  const hiss=ctx.createBufferSource(); hiss.buffer=noiseBuf; hiss.loop=true;
+  const hp=ctx.createBiquadFilter(); hp.type='highpass'; hp.frequency.value=6000;
+  const hg=ctx.createGain(); hg.gain.value=0.012; hiss.connect(hp); hp.connect(hg); hg.connect(master); hiss.start();
+  // 淡入
+  master.gain.linearRampToValueAtTime(0.9, ctx.currentTime+2.5);
+  audio={ctx,master,hum,noiseBuf};
+  voDecodeAll();   // 解码已预取的配音采样
+}
+function footstep(){
+  if(!audio) return; const {ctx,master}=audio;
+  const src=ctx.createBufferSource(); src.buffer=audio.noiseBuf;
+  const bp=ctx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=380+rnd()*120; bp.Q.value=1.2;
+  const g=ctx.createGain(); const t=ctx.currentTime;
+  g.gain.setValueAtTime(0.0,t); g.gain.linearRampToValueAtTime(0.18,t+0.01); g.gain.exponentialRampToValueAtTime(0.001,t+0.14);
+  src.connect(bp); bp.connect(g); g.connect(master); src.start(t); src.stop(t+0.16);
+}
+function flickerTick(){
+  if(!audio) return; const {ctx,master}=audio;
+  const o=ctx.createOscillator(); o.type='square'; o.frequency.value=90+rnd()*40;
+  const g=ctx.createGain(); const t=ctx.currentTime; g.gain.setValueAtTime(0.05,t); g.gain.exponentialRampToValueAtTime(0.001,t+0.06);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.07);
+}
+
+/* ---- 配音采样系统:mp3 预载 + 循环渐入渐出 + 一次性播放 ---- */
+const VO_SRC={walk:'steps_walk',run:'steps_run',breathRun:'breath_run',breathWalk:'breath_walk',breathIdle:'breath_idle',monster:'monster_near',dream:'dream_bgm',dreamExit:'dream_exit',duck:'duck_squeak'};
+const VO_RAW={}, VO={};
+for(const k in VO_SRC) fetch('assets/audio/'+VO_SRC[k]+'.mp3').then(r=>r.arrayBuffer()).then(b=>{ VO_RAW[k]=b; if(audio) voDecode(k); }).catch(()=>{});
+function voDecode(k){ if(!VO_RAW[k]||VO[k]) return; audio.ctx.decodeAudioData(VO_RAW[k].slice(0), buf=>{ VO[k]=buf; }, ()=>{}); }
+function voDecodeAll(){ for(const k in VO_SRC) voDecode(k); }
+const voLoops={walk:{v:0,t:0},run:{v:0,t:0},breathRun:{v:0,t:0},breathIdle:{v:0,t:0},monster:{v:0,t:0},dream:{v:0,t:0}};
+function voTick(dt){
+  if(!audio) return;
+  for(const k in voLoops){ const L=voLoops[k];
+    if(L.t>0 && !L.src && VO[k]){ const s=audio.ctx.createBufferSource(); s.buffer=VO[k]; s.loop=true;
+      const g=audio.ctx.createGain(); g.gain.value=0; s.connect(g); g.connect(audio.master); s.start(); L.src=s; L.g=g; }
+    if(L.g){ L.v+=(L.t-L.v)*Math.min(1,dt*(L.t>L.v?2.2:3.5)); if(L.v<0.001&&L.t===0)L.v=0; L.g.gain.value=L.v; }   // 渐入慢、渐出快
+  }
+}
+function voPlay(k,vol){ if(!audio||!VO[k]) return; const s=audio.ctx.createBufferSource(); s.buffer=VO[k];
+  const g=audio.ctx.createGain(); g.gain.value=(vol!==undefined?vol:0.7); s.connect(g); g.connect(audio.master); s.start(); }
+let voIdleT=0, voWalkBreathT=0, voWalkBreathNext=14+rnd()*16;
+
+/* ============================================================
+   第一人称控制器：指针锁定 + 移动 + 碰撞 + 头部摆动
+   ============================================================ */
+const player={ pos:new THREE.Vector3(0, EYE, 0), vel:new THREE.Vector3(), yaw:0, pitch:0,
+  bob:0, steps:0, sinceStep:0, moving:false };
+// 出生点:开场房间中心
+{ player.pos.set(INTRO_spawn.x, EYE, INTRO_spawn.z); player.yaw=Math.PI; }
+window.__player=player; window.__camera=camera; window.__scene=scene;   // 调试用
+
+const keys={};
+addEventListener('keydown',e=>{ keys[e.code]=true;
+  const canClose=(locked||window.__testNPC);
+  if(e.code==='Space'||e.code==='KeyE'){ if(noteOpen||journalOpen){ if(canClose) closeOverlays(); } else tryInteract(); if(e.code==='Space') e.preventDefault(); }
+  else if(e.code==='KeyJ'){ if(journalOpen){ if(canClose) closeOverlays(); } else if(!noteOpen) toggleJournal(); }
+  // Esc:交给浏览器解锁 + pointerlockchange 处理(读纸条时不弹暂停屏,纸条保留,点画面继续)
+});
+addEventListener('keyup',e=>{ keys[e.code]=false; });
+
+let locked=false;
+const startScreen=document.getElementById('startScreen');
+const startBtn=document.getElementById('startBtn');
+const cross=document.getElementById('cross');
+const hud=document.getElementById('hud');
+// 死循环:上一轮从出口逃出后重载 → 换成「又回到起点」的开场文案
+window.__loop=false;
+try{ if(sessionStorage.getItem('br_loop')){ sessionStorage.removeItem('br_loop'); window.__loop=true;
+  const _h1=startScreen.querySelector('h1'); if(_h1) _h1.innerHTML='逃出生天<small>THE BACKROOMS · 这里是？</small>';
+  const _p=startScreen.querySelector('p'); if(_p) _p.innerHTML='你推开了出口门，眼前一白……<br>你闻到潮湿的腐味，<br><strong style="color:#e9d96e">这里的一切，似乎有些熟悉。</strong>';
+} }catch(e){}
+
+let started=false;
+const pauseScreen=document.getElementById('pauseScreen');
+function requestLock(){ const p=renderer.domElement.requestPointerLock&&renderer.domElement.requestPointerLock(); if(p&&p.catch) p.catch(()=>{}); }
+document.addEventListener('pointerlockchange',()=>{
+  locked = document.pointerLockElement===renderer.domElement;
+  cross.classList.toggle('on',locked);
+  hud.classList.toggle('on',locked);
+  if(locked){ started=true; startScreen.classList.add('hidden'); pauseScreen.classList.add('hidden'); closeOverlays(); initAudio(); if(audio&&audio.ctx.state==='suspended') audio.ctx.resume(); }
+  else if(started && !won && !escaping && !noteOpen && !journalOpen){ pauseScreen.classList.remove('hidden'); }   // 仅"非读纸条时"解锁才弹暂停屏
+});
+pauseScreen.addEventListener('click',()=>{ if(!locked) requestLock(); });   // 点击暂停屏 → 重新锁定继续
+addEventListener('mousemove',e=>{ if(!locked||paused) return;
+  player.yaw   -= e.movementX*0.0022;
+  player.pitch -= e.movementY*0.0022;
+  player.pitch = Math.max(-1.35, Math.min(1.35, player.pitch));
+});
+
+startBtn.addEventListener('click',()=>{ if(startBtn.disabled) return; requestLock(); });
+document.getElementById('againBtn').addEventListener('click',()=>location.reload());
+
+// GLB 就绪或超时后允许开始
+(function ready(){ let n=0; const t=setInterval(()=>{ n++;
+  if(window.__glbLoaded || n>60){ clearInterval(t); startBtn.disabled=false; startBtn.textContent=window.__loop?'醒来':'进入后室'; window.__brReady=true; loadbar.style.width='100%'; }
+},100); })();
+
+/* ---------- 碰撞：圆 vs 附近墙AABB 推出 ---------- */
+function collide(px,pz){
+  const ci=Math.floor((px+WORLD_W/2)/CELL), cj=Math.floor((pz+WORLD_H/2)/CELL);
+  for(let it=0;it<2;it++){
+    for(let dci=-1;dci<=1;dci++)for(let dcj=-1;dcj<=1;dcj++){
+      const arr=grid.get(gkey(ci+dci,cj+dcj)); if(!arr) continue;
+      for(const a of arr){ if(a.disabled) continue;
+        const nx=Math.max(a.minX,Math.min(px,a.maxX));
+        const nz=Math.max(a.minZ,Math.min(pz,a.maxZ));
+        let dx=px-nx, dz=pz-nz; let d2=dx*dx+dz*dz;
+        if(d2<PLYR_R*PLYR_R){
+          let d=Math.sqrt(d2)||0.0001; const push=(PLYR_R-d);
+          if(d2<1e-8){ // 圆心在盒内：沿最近轴推出
+            const toL=px-a.minX, toR=a.maxX-px, toB=pz-a.minZ, toT=a.maxZ-pz;
+            const m=Math.min(toL,toR,toB,toT);
+            if(m===toL) px=a.minX-PLYR_R; else if(m===toR) px=a.maxX+PLYR_R;
+            else if(m===toB) pz=a.minZ-PLYR_R; else pz=a.maxZ+PLYR_R;
+          } else { px+=dx/d*push; pz+=dz/d*push; }
+        }
+      }
+    }
+  }
+  // 世界边界(留出出口)
+  const m=PLYR_R+0.05;
+  px=Math.max(-WORLD_W/2+m, Math.min(WORLD_W/2-m, px));
+  pz=Math.max(INTRO_zRoomN+m, Math.min(WORLD_H/2-m, pz));   // 北扩到开场房间,南封闭
+  return [px,pz];
+}
+const NPC_R=0.38;
+function npcCollide(px,pz){   // 怪物同款碰撞消解:柱子/隔断/道具/关着的门都推得开,不再穿模
+  const ci=Math.floor((px+WORLD_W/2)/CELL), cj=Math.floor((pz+WORLD_H/2)/CELL);
+  for(let it=0;it<2;it++){
+    for(let dci=-1;dci<=1;dci++)for(let dcj=-1;dcj<=1;dcj++){
+      const arr=grid.get(gkey(ci+dci,cj+dcj)); if(!arr) continue;
+      for(const a of arr){ if(a.disabled) continue;
+        const nx=Math.max(a.minX,Math.min(px,a.maxX));
+        const nz=Math.max(a.minZ,Math.min(pz,a.maxZ));
+        let dx=px-nx, dz=pz-nz; let d2=dx*dx+dz*dz;
+        if(d2<NPC_R*NPC_R){
+          let d=Math.sqrt(d2)||0.0001; const push=(NPC_R-d);
+          if(d2<1e-8){
+            const toL=px-a.minX, toR=a.maxX-px, toB=pz-a.minZ, toT=a.maxZ-pz;
+            const mm=Math.min(toL,toR,toB,toT);
+            if(mm===toL) px=a.minX-NPC_R; else if(mm===toR) px=a.maxX+NPC_R;
+            else if(mm===toB) pz=a.minZ-NPC_R; else pz=a.maxZ+NPC_R;
+          } else { px+=dx/d*push; pz+=dz/d*push; }
+        }
+      }
+    }
+  }
+  const mb=NPC_R+0.05;
+  px=Math.max(-WORLD_W/2+mb, Math.min(WORLD_W/2-mb, px));
+  pz=Math.max(INTRO_ZC+mb, Math.min(WORLD_H/2-mb, pz));     // 不进开场走廊
+  return [px,pz];
+}
+
+// GLB 内部：水平射线碰撞
+const _ray=new THREE.Raycaster(); const _dir=new THREE.Vector3();
+function collideGLB(px,pz){
+  if(!glbRegion||!meshColliders.length) return [px,pz];
+  const dx=px-glbRegion.cx, dz=pz-glbRegion.cz;
+  if(dx*dx+dz*dz > (glbRegion.r+2)*(glbRegion.r+2)) return [px,pz];
+  const origin=new THREE.Vector3(px, EYE*0.6, pz);
+  for(let k=0;k<8;k++){ const ang=k/8*Math.PI*2; _dir.set(Math.cos(ang),0,Math.sin(ang));
+    _ray.set(origin,_dir); _ray.far=PLYR_R+0.05;
+    const hits=_ray.intersectObjects(meshColliders,true);
+    if(hits.length){ const h=hits[0]; const back=(PLYR_R+0.05)-h.distance;
+      px+= -_dir.x*back; pz+= -_dir.z*back; }
+  }
+  return [px,pz];
+}
+
+/* ---------- 互动 / 胜利 ---------- */
+let won=false;
+const msg=document.getElementById('msg');
+function flash(msgTxt){ msg.textContent=msgTxt; msg.style.opacity='1'; clearTimeout(flash._t);
+  flash._t=setTimeout(()=>{ msg.style.opacity='0'; },2600); }
+// ---- 交互 / 手写纸条 / 日志 ----
+let noteOpen=false, journalOpen=false, paused=false;
+const journalNotes=[], journalSet=new Set();
+const noteEl=document.getElementById('note'), noteTxtEl=document.querySelector('#note .txt');
+const journalEl=document.getElementById('journal'), jlistEl=document.querySelector('#journal .jlist');
+const NOTE_FLAVOR=[   // 兜底(出口未加载时):无信息氛围碎片
+  '出口……我记得是往那边。别问我哪边。','数着门走。别数错。','我写不下去了。手一直在抖。',
+  '如果你还能读懂这行字,说明你还没疯透。','别回头。它跟在纸条后面。'];
+/* ============ 线索生成系统(锁定版) ============
+   三条铁律:①铁门上的锚点纸条永真 ②同类道具阵营一致(每局掷 1~2 类骗子) ③骗子严格说反(方向反/远近反/地标错/指认冤枉好人)。
+   纸条内容 = 按空格那一刻现场生成:玩家位置↔出口(远/中/近+方向偏差) × 该类阵营。先有世界,再有纸条。 */
+const PROP_CN={duck:'小黄鸭',balloons:'生日气球',arch:'气球门',tv:'旧电视机',foldchairs:'折叠椅',bear:'小熊',vending:'售货机',swing:'秋千'};
+let clueSys=null, lastNoteTxt='';
+function pickA(a){ return a[(rnd()*a.length)|0]; }
+function initClueSys(){
+  if(clueSys) return clueSys;
+  const slot=doorSlots.find(s=>s.isExit); if(!slot) return null;
+  const ex = slot.axis==='H' ? slot.along : slot.line;      // 出口门世界坐标(生成期即知,不等异步)
+  const ez = slot.axis==='H' ? slot.line  : slot.along;
+  const types=Object.keys(PROP_CN);
+  const sh=[...types]; for(let i=sh.length-1;i>0;i--){ const j=(rnd()*(i+1))|0; [sh[i],sh[j]]=[sh[j],sh[i]]; }
+  const nL=1+((rnd()<0.5)?1:0);                             // 1~2 类骗子(偏氛围不难)
+  const liars=new Set(sh.slice(0,nL)), truths=sh.slice(nL);
+  const anchorType=(truths.includes('duck')&&rnd()<0.6)?'duck':pickA(truths);   // 锚点点名,偏爱鸭子
+  const warnLiar=PROP_CN[[...liars][0]];                    // 锚点顺带点名一个骗子(真假提示更直白)
+  const anchorText=pickA([
+    `这里面的东西，有真有假。\n信${PROP_CN[anchorType]}——它说的都是真话，照做。\n小心${warnLiar}，它写的全是反话。`,
+    `我成功逃出去了！我把正确的提示都留给了${PROP_CN[anchorType]}。\n${warnLiar}被那东西碰过了，别信。\n——逃出去的人`,
+    `记住两件事，你就能出去：\n${PROP_CN[anchorType]}不会骗你。\n${warnLiar}只会骗你。`]);
+  clueSys={ ex, ez, deep:ez>0, left:ex>0, liars, truths, anchorType, anchorText };   // 深=z大(远离铁门);背对铁门左手=+x
+  window.__clueSys=clueSys;
+  return clueSys;
+}
+function typesNearExit(cs){ const s=new Set(); for(const p of (window.__props||[])){ if(p.label==='anchor') continue; if(PROP_CN[p.label]&&Math.hypot(p.x-cs.ex,p.z-cs.ez)<12) s.add(p.label); } return s; }
+/* 方位词:按玩家「读取那一刻的面向」实时计算(8 扇区);骗子=180° 反向 */
+const DIR_TMPL=[
+  (dir,dist)=>`它在你的${dir}。${dist}。`,
+  (dir,dist)=>`别看别处。${dir}。${dist}。`,
+  (dir,dist)=>`朝你的${dir}走。${dist}。`,
+  (dir,dist)=>`那扇门,现在在你${dir}。${dist}。`,
+  (dir,dist)=>`方向只有一个:${dir}。${dist}。`,
+  (dir,dist)=>`往${dir}。别停下来。${dist}。`,
+  (dir,dist)=>`我最后一次看见那扇门,是在你现在的${dir}。${dist}。`,
+  (dir,dist)=>`${dir}。记住,${dir}。${dist}。`];
+function dirWord(yaw,dx,dz){
+  const d=Math.hypot(dx,dz)||1, fx=-Math.sin(yaw), fz=-Math.cos(yaw);
+  const dot=fx*dx/d+fz*dz/d, cr=fz*dx/d-fx*dz/d;      // cr>0=左侧
+  const a=Math.atan2(cr,dot), s=Math.abs(a), L=a>0;
+  if(s<Math.PI/8) return '正前方';
+  if(s>Math.PI*7/8) return '正后方';
+  if(s<Math.PI*3/8) return L?'左前方':'右前方';
+  if(s<Math.PI*5/8) return L?'左手边':'右手边';
+  return L?'左后方':'右后方';
+}
+const DIR_INV={'正前方':'正后方','正后方':'正前方','左前方':'右后方','右后方':'左前方','右前方':'左后方','左后方':'右前方','左手边':'右手边','右手边':'左手边'};
+function noteFor(p){   // 每个道具一局只有一张纸条(种类/对象/措辞第一次读时定死);方位/远近在读取时按面向实时渲染
+  const cs=initClueSys();
+  if(!cs) return pickA(NOTE_FLAVOR);
+  if(p.label==='anchor') return cs.anchorText;
+  const truthful=!cs.liars.has(p.label);
+  if(!p.clue){
+    const c={tail:(rnd()<0.18?pickA(['\n……墨迹还没干。','\n(这行字像是刚印上去的)','\n▇ ▇ ▇ ▇ ▇（后面有一串乱码）','\n背面还有一行:「逃不出去的…逃不出去的！！！！」']):'')};
+    const r=rnd();
+    if(r<0.08){           // 指认(固定):真话点真骗子;骗子冤枉好人 —— 措辞直白
+      const pool=truthful?[...cs.liars]:cs.truths.filter(t=>t!==p.label);
+      if(pool.length){ const t=PROP_CN[pickA(pool)];
+        c.txt=pickA([`${t}是骗子。是骗子。是骗子。是骗子。是骗子。`,`别信${t}。它的纸条全被改过了。`,`${t}在说谎……`,`记住：${t}=假话。`]); }
+    } else if(r<0.16){    // 背书(固定):真话保真人(偏爱鸭子);骗子保同伙 —— 措辞直白
+      let pool=truthful?cs.truths.filter(t=>t!==p.label):[...cs.liars].filter(t=>t!==p.label);
+      if(truthful && cs.truths.includes('duck') && p.label!=='duck' && rnd()<0.5) pool=['duck'];
+      if(pool.length){ const t=PROP_CN[pickA(pool)];
+        c.txt=pickA([`${t}说的都是真话，可以完全相信。`,`${t}从来都不说假话。`,`一定要相信${t}。一定要相信！！！`,`记住：${t}=真话。`]); }
+    } else if(r<0.22){    // 地标(固定):真话报守门道具;骗子报「确实不在出口边」的类
+      if(truthful){ const g=window.__guardian?PROP_CN[window.__guardian.label]:null;
+        c.txt = g?pickA([`出口的门边上有一个${g}。看到它，你就到了。`,`认准${g}。门就在附近。`]):'出口门前空空荡荡，什么都没有。';
+      } else { const near=typesNearExit(cs), fakes=Object.keys(PROP_CN).filter(t=>!near.has(t));
+        if(fakes.length) c.txt=pickA([`出口的门边上有一个${PROP_CN[pickA(fakes)]}。看到它就到了。`,`认准${PROP_CN[pickA(fakes)]},门就守在它旁边。`]); }
+    }
+    if(!c.txt) c.dirT=(rnd()*DIR_TMPL.length)|0;   // 其余 78% = 方位纸条(模板固定,方位实时)
+    p.clue=c;
+  }
+  const c=p.clue;
+  if(c.txt) return c.txt+c.tail;
+  const dx=cs.ex-player.pos.x, dz=cs.ez-player.pos.z, d=Math.hypot(dx,dz);
+  let dir=dirWord(player.yaw,dx,dz);
+  let tier=d<13?'near':(d<30?'mid':'far');
+  if(!truthful){ dir=DIR_INV[dir]; tier=(tier==='near')?'far':(tier==='far'?'near':'mid'); }   // 铁律三:方向反+远近反
+  const g=window.__guardian?PROP_CN[window.__guardian.label]:null;
+  const dist = tier==='far' ? '还远,做好走一阵的准备'
+             : tier==='mid' ? '不算太远了'
+             : (truthful&&g ? `很近了。找门边放着${g}的那扇` : '很近了,就在这一片');
+  return DIR_TMPL[c.dirT](dir,dist)+c.tail;
+}
+function openNote(p){
+  if(noteOpen||journalOpen) return;
+  if(p.label==='duck') voPlay('duck',0.75);                  // 捏鸭子:吱
+  const txt=noteFor(p);                                      // 方位纸条会按当前面向重新渲染
+  noteTxtEl.textContent=txt; noteEl.style.display='flex'; noteOpen=true; paused=true;
+  window.__sanCost(p.label==='anchor'?0:(p.readN?3:9)); p.readN=(p.readN||0)+1;   // 首读-9,重读校方位-3,锚点免费
+  if(!journalSet.has(txt)){ journalSet.add(txt); journalNotes.push(txt); }
+}
+function toggleJournal(){
+  if(noteOpen) return;
+  journalOpen=!journalOpen; paused=journalOpen; journalEl.style.display=journalOpen?'flex':'none';
+  if(journalOpen) jlistEl.innerHTML = journalNotes.length ? journalNotes.map(t=>'<div class="jitem">'+t+'</div>').join('') : '<div class="jempty">你还没读到任何纸条。</div>';
+}
+function closeOverlays(){ if(noteOpen){ noteEl.style.display='none'; noteOpen=false; } if(journalOpen){ journalEl.style.display='none'; journalOpen=false; } paused=false; }
+function resumeFromOverlay(){ if(locked) closeOverlays(); else requestLock(); }   // 解锁时(Esc后)点纸条→重新锁定,锁定成功时会自动收起纸条
+noteEl.addEventListener('click', resumeFromOverlay);
+journalEl.addEventListener('click', resumeFromOverlay);
+function tryInteract(){   // 空格:取最近的门或道具(≤范围)
+  if(!locked && !window.__testNPC) return;
+  if(epilogue) return;   // 梦境里没有纸条,也没有门要开
+  let bD=null,dD=1e9; for(const d of doors){ const dd=Math.hypot(player.pos.x-d.cx,player.pos.z-d.cz); if(dd<dD){dD=dd;bD=d;} }
+  let bP=null,dP=1e9; for(const p of (window.__props||[])){ const dd=Math.hypot(player.pos.x-p.x,player.pos.z-p.z); if(dd<dP){dP=dd;bP=p;} }
+  if(bD && dD<3.2 && dD<=dP){ bD.open=!bD.open; bD.aabb.disabled=bD.open; bD.animating=true; if(bD.isExit&&bD.open) escape(); return; }
+  if(bP && dP<2.6) openNote(bP);
+}
+function tryOpenDoor(){
+  if(!locked) return;
+  let best=null,bd=1e9;
+  for(const d of doors){ const dd=Math.hypot(player.pos.x-d.cx, player.pos.z-d.cz); if(dd<bd){bd=dd;best=d;} }
+  if(best && bd<3.2){ best.open=!best.open; best.aabb.disabled=best.open; best.animating=true;
+    if(best.isExit && best.open) escape(); }
+}
+let escaping=false;
+function escape(){   // 打开出口门 → 白光 → 进入梦境旷野(尾声) → 走到光门 → 重载回最初的房间(死循环)
+  if(escaping) return; escaping=true;
+  flash('门后是一片刺眼的白……');
+  const f=document.getElementById('flash'); f.style.transition='opacity 1.2s'; f.style.background='#eafcff'; f.style.opacity='1';
+  setTimeout(()=>{
+    if(dreamReady){ enterEpilogue(); escaping=false; setTimeout(()=>{ f.style.opacity='0'; },300); }
+    else { try{ sessionStorage.setItem('br_loop','1'); }catch(e){} location.reload(); }   // 资源没好→直接循环(兜底)
+  }, 1600);
+}
+
+/* ---------- 梦境尾声:出口门后的 dreamcore 旷野(草坡+小路+暮色穹顶),漫步至光门 → 回到最初 ---------- */
+let epilogue=false, dreamRoot=null, dreamDoor=null, dreamReady=false, dreamLeaving=false;
+const dreamTerrain=[]; window.__dreamC=null; window.__dreamGate=null;
+const dreamRay=new THREE.Raycaster(), dreamDown=new THREE.Vector3(0,-1,0), dreamRayO=new THREE.Vector3();
+function dreamGroundY(x,z){
+  if(!dreamTerrain.length) return null;
+  dreamRayO.set(x, 330, z); dreamRay.set(dreamRayO, dreamDown); dreamRay.far=250;
+  const h=dreamRay.intersectObjects(dreamTerrain, true);
+  return h.length ? h[0].point.y : null;
+}
+new GLTFLoader().load('assets/dreamcore.glb',(g)=>{
+  const root=g.scene; root.position.set(0,200,0); root.updateMatrixWorld(true);
+  root.traverse(o=>{ if(o.isMesh){
+    o.frustumCulled=false;
+    const ms=Array.isArray(o.material)?o.material:[o.material];
+    const rep=ms.map(m=>{ const nm=new THREE.MeshBasicMaterial({map:m.map||null, fog:false, side:THREE.DoubleSide});
+      if(!m.map&&m.color) nm.color.copy(m.color); nm.transparent=!!m.transparent; nm.opacity=(m.opacity!==undefined?m.opacity:1); return nm; });
+    o.material=Array.isArray(o.material)?rep:rep[0];
+    if(/^Object_(10|11|12)$/.test(o.name)) dreamTerrain.push(o);      // 三层地形=可行走面
+    if(o.name==='Object_8') dreamDoor=o;                              // 黑色门洞=Object_8(底边贴地);Object_4 是漂浮文字,别锚错
+  }});
+  root.visible=false; scene.add(root); dreamRoot=root;
+  let dome=null; root.traverse(o=>{ if(o.isMesh&&o.name==='Object_6') dome=o; });
+  const db=new THREE.Box3().setFromObject(dome), dc=new THREE.Vector3(); db.getCenter(dc);
+  window.__dreamC={x:dc.x, z:dc.z, r:Math.min(db.max.x-db.min.x, db.max.z-db.min.z)/2*0.78};
+  dreamReady=true;
+},undefined,e=>console.warn('dreamcore 加载失败(逃脱将直接循环)',e));
+function enterEpilogue(){
+  epilogue=true; dreamRoot.visible=true;
+  if(npc.obj) npc.obj.visible=false; if(tvHead) tvHead.visible=false; npc.active=false; npc.detect=0;
+  san=100; scene.fog.density=0.0005;
+  const c=window.__dreamC;
+  const sx=c.x, sz=c.z+30, gy=dreamGroundY(sx,sz);                     // 出生:中心偏南,贴地
+  player.pos.set(sx, (gy!==null?gy:206)+EYE, sz); player.yaw=0; player.pitch=0;   // 面向 -z(黑门方向)
+  // 判定区 = 黑色门洞(Object_4)的门面范围:踏进这个区域 = 穿过门 → 回到初始房间
+  if(dreamDoor){
+    const bb=new THREE.Box3().setFromObject(dreamDoor);
+    window.__dreamGate={minX:bb.min.x-0.5, maxX:bb.max.x+0.5, minZ:bb.min.z-1.6, maxZ:bb.max.z+1.6};
+  } else window.__dreamGate=null;
+  flash('风。是夏天的风。\n沿着小路，走进那扇门。');
+}
+function dreamExit(){
+  if(dreamLeaving) return; dreamLeaving=true;
+  voPlay('dreamExit',0.85);                                  // 「走出梦境…」配音;白屏延长让它播完
+  const f=document.getElementById('flash'); f.style.transition='opacity 1.8s'; f.style.background='#ffffff'; f.style.opacity='1';
+  setTimeout(()=>{ try{ sessionStorage.setItem('br_loop','1'); }catch(e){} location.reload(); }, 4300);
+}
+function win(){
+  if(won) return; won=true;
+  document.exitPointerLock();
+  const secs=((performance.now()-t0)/1000);
+  document.getElementById('winStats').innerHTML =
+    `用时 <b style="color:#fff">${secs.toFixed(0)}s</b>　·　步数 <b style="color:#fff">${player.steps}</b>`;
+  const f=document.getElementById('flash'); f.style.background='#eafbe8'; f.style.opacity='1';
+  setTimeout(()=>{ document.getElementById('winScreen').classList.remove('hidden'); f.style.opacity='0'; },350);
+}
+
+/* ============================================================
+   恐怖 NPC:TV Woman —— 迷宫巡逻 + 视锥检测(不能被它看到)
+   ============================================================ */
+const dreadEl=document.getElementById('dread');
+const npc={
+  obj:null, mixer:null, ready:false, active:true, state:'patrol',
+  pos:new THREE.Vector3(-999,0,-999), yOff:0, yaw:0, faceOff:0,   // v4 模型:faceOff=0 面朝移动方向(旧值 π 会倒着走)
+  fwd:{x:0,z:1}, atCell:{i:0,j:0}, prevCell:{i:-1,j:-1}, nextCell:{i:0,j:0},
+  target:new THREE.Vector3(), speed:1.5,
+  visRange:11, visCos:Math.cos(38*Math.PI/180),
+  detect:0, hbT:0, snd:null, activated:false, lostT:0
+};
+/* 程序化「电视头」——原模型骨骼异常导致头没接上,自己做一个发光雪花屏的 CRT 当头(更贴 TV Woman 主题) */
+let tvHead=null, tvTex=null, tvCtx=null, tvGlow=null, tvHeadY=2.0, tvT=0;
+function buildTVHead(){
+  const g=new THREE.Group(); g.visible=false;
+  const caseMat=new THREE.MeshStandardMaterial({color:0x26262a, roughness:0.75, metalness:0.15});
+  g.add(new THREE.Mesh(new THREE.BoxGeometry(0.5,0.42,0.44), caseMat));           // 机壳
+  const cnv=document.createElement('canvas'); cnv.width=96; cnv.height=72; tvCtx=cnv.getContext('2d');
+  tvTex=new THREE.CanvasTexture(cnv); tvTex.colorSpace=THREE.SRGBColorSpace;
+  const scr=new THREE.Mesh(new THREE.PlaneGeometry(0.42,0.32), new THREE.MeshBasicMaterial({map:tvTex, fog:true}));
+  scr.position.set(0,0.01,0.221); g.add(scr);                                     // 正面屏幕(+Z)
+  const antMat=new THREE.MeshStandardMaterial({color:0x4a4a4a, roughness:0.5, metalness:0.4});
+  [[-0.12,0.6],[0.12,-0.6]].forEach(([x,rz])=>{ const a=new THREE.Mesh(new THREE.CylinderGeometry(0.007,0.007,0.36,6), antMat); a.position.set(x,0.34,-0.1); a.rotation.z=rz; g.add(a); });
+  scene.add(g); tvHead=g;
+  tvGlow=new THREE.PointLight(0xcfe6ff, 0.0, 4.2, 2.0); scene.add(tvGlow);         // 屏幕冷光
+}
+function drawTVStatic(){
+  if(!tvCtx) return; const W=96,H=72, img=tvCtx.createImageData(W,H), d=img.data;
+  for(let i=0;i<d.length;i+=4){ const v=40+((Math.random()*180)|0); d[i]=v*0.8; d[i+1]=v*0.9; d[i+2]=v; d[i+3]=255; }
+  tvCtx.putImageData(img,0,0);
+  tvCtx.fillStyle='rgba(180,210,255,0.12)'; tvCtx.fillRect(0,(tvT*45)%H,W,5);      // 滚动横条
+  tvTex.needsUpdate=true;
+}
+/* buildTVHead(); —— partygoer 自带头部,停用程序化电视头 */
+function npcOpenNeighbors(i,j){ const n=[];
+  if(inb(i+1,j)&&!vw[i+1][j]) n.push([i+1,j]);
+  if(inb(i-1,j)&&!vw[i][j])   n.push([i-1,j]);
+  if(inb(i,j+1)&&!hw[i][j+1]) n.push([i,j+1]);
+  if(inb(i,j-1)&&!hw[i][j])   n.push([i,j-1]);
+  return n; }
+function npcNextStep(){
+  const ns=npcOpenNeighbors(npc.atCell.i,npc.atCell.j);
+  const filt=ns.filter(([i,j])=>!(i===npc.prevCell.i&&j===npc.prevCell.j));
+  const pool=filt.length?filt:ns;
+  if(!pool.length){ npc.target.set(npc.pos.x,0,npc.pos.z); return; }
+  const [ni,nj]=pool[(rnd()*pool.length)|0];
+  npc.prevCell={i:npc.atCell.i,j:npc.atCell.j}; npc.nextCell={i:ni,j:nj};
+  const cc=cellCenter(ni,nj); npc.target.set(cc.x,0,cc.z);
+}
+function npcPlaceStart(){
+  for(let t=0;t<300;t++){
+    const i=1+((rnd()*(GW-2))|0), j=1+((rnd()*(GH-2))|0);
+    if(npcOpenNeighbors(i,j).length===0) continue;
+    const cc=cellCenter(i,j);
+    if(cc.z < INTRO_ZC+CELL) continue;                                   // 别刷进开场走廊/房
+    if(Math.hypot(cc.x-player.pos.x, cc.z-player.pos.z)<15) continue;    // 离玩家远点出现
+    npc.pos.set(cc.x,0,cc.z); npc.atCell={i,j}; npc.prevCell={i:-1,j:-1}; npc.fwd={x:0,z:1};
+    npcNextStep(); return true;
+  }
+  return false;
+}
+function npcPlaceEntrance(){   // 首次:固定放在玩家刚进后室的迷宫入口附近(BFS 从入口格往里走 3~5 格)
+  const start={i:INTRO_CI, j:0};                     // 迷宫北界缺口接入的格
+  const seen=new Set([start.i+','+start.j]); let frontier=[start]; const byDepth=[[start]];
+  for(let depth=1; depth<7 && frontier.length; depth++){
+    const next=[];
+    for(const c of frontier) for(const [ni,nj] of npcOpenNeighbors(c.i,c.j)){ const k=ni+','+nj; if(!seen.has(k)){ seen.add(k); next.push({i:ni,j:nj}); } }
+    byDepth[depth]=next; frontier=next;
+  }
+  let pick=null, bestScore=-1;
+  const sc=cellCenter(start.i,start.j);
+  for(let d=2; d<=5; d++){ if(!byDepth[d]) continue;
+    for(const c of byDepth[d]){ const cc=cellCenter(c.i,c.j);
+      const los = !sightBlocked(sc.x, sc.z, cc.x, cc.z);   // 从入口能直接看到她最好
+      const score=(los?100:0)+d;                            // 优先有视线,其次更靠里
+      if(score>bestScore){ bestScore=score; pick=c; } } }
+  if(!pick){ for(const d of [3,2,4]){ if(byDepth[d]&&byDepth[d].length){ pick=byDepth[d][0]; break; } } }
+  if(!pick) pick=start;
+  const cc=cellCenter(pick.i,pick.j);
+  npc.pos.set(cc.x,0,cc.z); npc.atCell={i:pick.i,j:pick.j}; npc.prevCell={i:-1,j:-1}; npc.fwd={x:0,z:1};
+  npc.activated=false;                               // 先静止待命,玩家靠近才"活过来"
+  npcNextStep();
+}
+function npcReappearNear(){   // 走失太久 → 在玩家附近、视野外(或被墙挡)重新出现,成为持续威胁
+  const fx=-Math.sin(player.yaw), fz=-Math.cos(player.yaw);
+  for(let t=0;t<250;t++){
+    const i=1+((rnd()*(GW-2))|0), j=1+((rnd()*(GH-2))|0);
+    if(npcOpenNeighbors(i,j).length===0) continue;
+    const cc=cellCenter(i,j); if(cc.z<INTRO_ZC+CELL) continue;
+    const dx=cc.x-player.pos.x, dz=cc.z-player.pos.z, d=Math.hypot(dx,dz);
+    if(d<13||d>26) continue;
+    const dot=(dx/d)*fx+(dz/d)*fz;                                  // 在正前方且能直视 → 跳过(避免凭空出现在眼前)
+    if(dot>0.2 && !sightBlocked(player.pos.x,player.pos.z,cc.x,cc.z)) continue;
+    npc.pos.set(cc.x,0,cc.z); npc.atCell={i,j}; npc.prevCell={i:-1,j:-1}; npc.fwd={x:0,z:1}; npc.activated=false; npc.detect=0; npc.lostT=0;
+    return true;
+  }
+  return false;
+}
+function npcPunishNear(){   // 原地静止太久(如灯下回san) → 它直接刷到你身边、已激活开始捕猎
+  const fx=-Math.sin(player.yaw), fz=-Math.cos(player.yaw);
+  for(let t=0;t<250;t++){
+    const i=1+((rnd()*(GW-2))|0), j=1+((rnd()*(GH-2))|0);
+    if(npcOpenNeighbors(i,j).length===0) continue;
+    const cc=cellCenter(i,j); if(cc.z<INTRO_ZC+CELL) continue;
+    const dx=cc.x-player.pos.x, dz=cc.z-player.pos.z, d=Math.hypot(dx,dz);
+    if(d<7||d>15) continue;                                          // 比 reappear 更贴身
+    const dot=(dx/d)*fx+(dz/d)*fz;
+    if(dot>0.2 && !sightBlocked(player.pos.x,player.pos.z,cc.x,cc.z)) continue;   // 别凭空出现在眼前
+    npc.pos.set(cc.x,0,cc.z); npc.atCell={i,j}; npc.prevCell={i:-1,j:-1}; npc.fwd={x:0,z:1};
+    npc.activated=true; npc.lostT=0;                                 // 直接进入捕猎状态
+    return true;
+  }
+  return false;
+}
+function sightBlocked(x0,z0,x1,z1){   // 视线遮挡:沿线采样,任一点落在墙 AABB 内即被挡
+  const dx=x1-x0, dz=z1-z0, dist=Math.hypot(dx,dz), steps=Math.ceil(dist/0.15);
+  for(let s=1;s<steps;s++){ const t=s/steps, x=x0+dx*t, z=z0+dz*t;
+    const ci=Math.floor((x+WORLD_W/2)/CELL), cj=Math.floor((z+WORLD_H/2)/CELL);
+    const arr=grid.get(gkey(ci,cj)); if(!arr) continue;
+    for(const a of arr){ if(a.disabled) continue;
+      if(x>=a.minX&&x<=a.maxX&&z>=a.minZ&&z<=a.maxZ) return true; } }
+  return false;
+}
+// 空间化音效:低频 drone(从 NPC 方向来)+ 心跳 + 被抓 stinger
+function npcSound(){ if(!audio||npc.snd) return; const {ctx,master}=audio;
+  const pan=ctx.createPanner(); pan.panningModel='HRTF'; pan.distanceModel='inverse'; pan.refDistance=2; pan.maxDistance=22; pan.rolloffFactor=1.3;
+  const gg=ctx.createGain(); gg.gain.value=0; pan.connect(gg); gg.connect(master);
+  const o1=ctx.createOscillator(); o1.type='sawtooth'; o1.frequency.value=47;
+  const o2=ctx.createOscillator(); o2.type='sine'; o2.frequency.value=61.5;
+  const lp=ctx.createBiquadFilter(); lp.type='lowpass'; lp.frequency.value=300;
+  o1.connect(lp); o2.connect(lp); lp.connect(pan); o1.start(); o2.start();
+  npc.snd={pan,g:gg};
+}
+function npcHeartbeat(vol){ if(!audio) return; const {ctx,master}=audio;
+  const o=ctx.createOscillator(); o.type='sine'; o.frequency.value=54; const g=ctx.createGain(); const t=ctx.currentTime;
+  g.gain.setValueAtTime(0.0001,t); g.gain.exponentialRampToValueAtTime(vol,t+0.03); g.gain.exponentialRampToValueAtTime(0.0001,t+0.22);
+  o.connect(g); g.connect(master); o.start(t); o.stop(t+0.24);
+}
+function npcStinger(){ if(!audio) return; const {ctx,master}=audio;
+  const o=ctx.createOscillator(); o.type='sawtooth'; o.frequency.setValueAtTime(300,ctx.currentTime); o.frequency.exponentialRampToValueAtTime(38,ctx.currentTime+0.55);
+  const g=ctx.createGain(); g.gain.setValueAtTime(0.5,ctx.currentTime); g.gain.exponentialRampToValueAtTime(0.001,ctx.currentTime+0.75);
+  o.connect(g); g.connect(master); o.start(); o.stop(ctx.currentTime+0.78);
+}
+function npcCaught(){
+  if(npc.state==='caught') return;
+  npc.state='caught'; npc.detect=1; npcStinger();
+  const f=document.getElementById('flash'); f.style.background='#000'; f.style.transition='opacity 0.7s'; f.style.opacity='1';
+  setTimeout(()=>{
+    player.pos.set(INTRO_spawn.x, EYE, INTRO_spawn.z); player.yaw=Math.PI; player.pitch=0;
+    npc.detect=0; npcPlaceEntrance(); npc.state='patrol';
+    flash('你被带回了起点。刚刚的…是什么？');
+    setTimeout(()=>{ f.style.opacity='0'; },140);
+  },900);
+}
+function sanFaint(){   // San=0 晕倒 → 淡黑 → 回最初出生房(同一迷宫,保留出口/线索进度)
+  if(fainting) return; fainting=true;
+  const f=document.getElementById('flash'); f.style.background='#000'; f.style.transition='opacity 1.0s'; f.style.opacity='1';
+  setTimeout(()=>{
+    player.pos.set(INTRO_spawn.x, EYE, INTRO_spawn.z); player.yaw=Math.PI; player.pitch=0;
+    san=100; npc.detect=0; npcPlaceEntrance();
+    flash('你眼睛一黑，晕了过去……\n再次睁眼，你回到了这里。');
+    setTimeout(()=>{ f.style.opacity='0'; fainting=false; },220);
+  },1100);
+}
+const npcLoader=new GLTFLoader();
+npcLoader.load('assets/partygoer.glb',(g)=>{
+  const root=g.scene;
+  // 自适应高度到 ~1.9m(该 CC 模型原始单位很大)
+  root.updateMatrixWorld(true);
+  const box=new THREE.Box3().setFromObject(root); const h=box.max.y-box.min.y;
+  root.scale.setScalar(h>0.001 ? 1.9/h : 1); npc.yOff=0;
+  let skinned=null;
+  root.traverse(o=>{ if(o.isMesh){ o.frustumCulled=false;
+    if(o.isSkinnedMesh && !skinned) skinned=o;
+    const ms=Array.isArray(o.material)?o.material:[o.material];
+    ms.forEach(m=>{ if(m){ m.fog=true; if(m.metalness!==undefined) m.metalness=Math.min(m.metalness,0.3); } }); } });
+  scene.add(root); npc.obj=root; npc.skinned=skinned;
+  root.updateMatrixWorld(true);
+  // 红气球系到左手:保持世界变换 reparent 到手骨,再把绳末端对齐掌心
+  {
+    let balloon=null, hand=null;
+    root.traverse(o=>{ if(o.isMesh && !balloon && /Baloon/i.test(o.name)) balloon=o; if(o.name==='CC_Base_L_Hand_034') hand=o; });
+    if(balloon && hand){
+      hand.attach(balloon);
+      const bb=new THREE.Box3().setFromObject(balloon);
+      const stringEnd=new THREE.Vector3((bb.min.x+bb.max.x)/2, bb.min.y, (bb.min.z+bb.max.z)/2);
+      const handW=hand.getWorldPosition(new THREE.Vector3());
+      const q=hand.getWorldQuaternion(new THREE.Quaternion()).invert();
+      const s=hand.getWorldScale(new THREE.Vector3());
+      balloon.position.add(handW.sub(stringEnd).applyQuaternion(q).divide(s));
+      root.updateMatrixWorld(true);
+    }
+  }
+  npc.mixer=new THREE.AnimationMixer(root);
+  npc.idleClip=null; npc.idleAction=null;
+  // v4 自带 walk 动画:直接播放,弃用 Mixamo FBX 重定向
+  const walkClip=(g.animations||[]).find(a=>/walk/i.test(a.name))||(g.animations||[])[0];
+  if(walkClip){ npc.walkAction=npc.mixer.clipAction(walkClip); npc.walkAction.play(); npc.walkAction.timeScale=0.06; }
+  npcPlaceEntrance(); npc.ready=true; window.__npc=npc;
+}, undefined, e=>console.warn('NPC 加载失败',e));
+
+/* 把 Mixamo「Standard Walk」重定向到 partygoer 的 CC_Base 骨骼(运行时 retarget) */
+function loadWalkAnim(targetSkinned, root){
+  if(!targetSkinned){ console.warn('未找到 SkinnedMesh,跳过走路重定向'); return; }
+  // 注:该模型 L/R 命名与物理侧别镜像,但实测「直连映射」(L↔L)四肢运动姿态正确(对称步态下镜像不可见)。
+  const names={
+    'CC_Base_Hip_02':'mixamorigHips',
+    'CC_Base_Waist_022':'mixamorigSpine',
+    'CC_Base_Spine01_023':'mixamorigSpine1',
+    'CC_Base_Spine02_024':'mixamorigSpine2',
+    'CC_Base_NeckTwist01_025':'mixamorigNeck',
+    'CC_Base_Head_027':'mixamorigHead',
+    'CC_Base_L_Thigh_04':'mixamorigLeftUpLeg',
+    'CC_Base_L_Calf_05':'mixamorigLeftLeg',
+    'CC_Base_L_Foot_06':'mixamorigLeftFoot',
+    'CC_Base_L_ToeBase_07':'mixamorigLeftToeBase',
+    'CC_Base_R_Thigh_013':'mixamorigRightUpLeg',
+    'CC_Base_R_Calf_016':'mixamorigRightLeg',
+    'CC_Base_R_Foot_017':'mixamorigRightFoot',
+    'CC_Base_R_ToeBase_018':'mixamorigRightToeBase',
+    'CC_Base_L_Clavicle_028':'mixamorigLeftShoulder',
+    'CC_Base_L_Upperarm_029':'mixamorigLeftArm',
+    'CC_Base_L_Forearm_030':'mixamorigLeftForeArm',
+    'CC_Base_L_Hand_034':'mixamorigLeftHand',
+    'CC_Base_R_Clavicle_037':'mixamorigRightShoulder',
+    'CC_Base_R_Upperarm_038':'mixamorigRightArm',
+    'CC_Base_R_Forearm_041':'mixamorigRightForeArm',
+    'CC_Base_R_Hand_045':'mixamorigRightHand'
+  };
+  new FBXLoader().load('assets/anim_walk.fbx',(fbx)=>{
+    try{
+      const clip=fbx.animations[0];
+      const rebake=()=>{
+        const clone=SkeletonUtils.clone(root);
+        scene.add(clone); clone.visible=false; clone.updateMatrixWorld(true);
+        const walk=bakeWalkClip(clone, fbx, clip, names);
+        scene.remove(clone);
+        if(npc.walkAction){ npc.mixer.uncacheClip(npc.walkAction._clip); }
+        npc.walkAction=npc.mixer.clipAction(walk);
+        npc.walkAction.play(); npc.walkAction.setEffectiveWeight(0);
+        console.log('Partygoer 走路重定向完成,轨道数:', walk.tracks.length, 'dur', walk.duration.toFixed(2));
+      };
+      rebake();
+      window.__rebakeWalk=(tL,tR,rL,rR)=>{ window.__palmTwistL=tL; window.__palmTwistR=tR; window.__palmRollL=rL; window.__palmRollR=rR; rebake(); };  // 调试:即时改手腕矫正角
+    }catch(e){ console.warn('走路重定向失败',e); }
+  }, undefined, e=>console.warn('走路 FBX 加载失败',e));
+}
+
+/* 「世界空间差量」重定向:把源骨骼相对自身 rest 的旋转变化(根相对坐标系)叠加到
+   目标骨骼自身 rest 朝向上。CC_Base 是干净骨架,全骨骼(含手臂)直接重定向即可。 */
+function bakeWalkClip(clone, fbx, srcClip, names){
+  const Q=THREE.Quaternion, V=THREE.Vector3, fps=30, dur=srcClip.duration, nf=Math.max(2, Math.round(dur*fps)+1), delta=dur/(nf-1);
+  // 手臂链(锁骨/大臂/小臂/手)完全不走 Mixamo 重定向 —— T-pose 与本模型玩偶绑定姿势差异过大,差量法在手臂上不成立。
+  // 方案:锁骨/小臂锁定绑定姿势;大臂程序化前后摆(与同侧腿反相);手用最短弧矫正到指尖朝下。
+  const CL_L='CC_Base_L_Clavicle_028', UP_L='CC_Base_L_Upperarm_029', FE_L='CC_Base_L_Forearm_030', HA_L='CC_Base_L_Hand_034';
+  const CL_R='CC_Base_R_Clavicle_037', UP_R='CC_Base_R_Upperarm_038', FE_R='CC_Base_R_Forearm_041', HA_R='CC_Base_R_Hand_045';
+  const ARMS=new Set([CL_L,UP_L,FE_L,HA_L,CL_R,UP_R,FE_R,HA_R]);
+  const srcBones={}; fbx.traverse(o=>{ if(o.isBone) srcBones[o.name]=o; });
+  const tgtBones={}; clone.traverse(o=>{ if(o.isBone) tgtBones[o.name]=o; });
+  const order=[]; clone.traverse(o=>{ if(o.isBone && names[o.name] && srcBones[names[o.name]] && !ARMS.has(o.name)) order.push(o.name); });
+  fbx.updateMatrixWorld(true); clone.updateMatrixWorld(true);
+  const srcRootInv=new Q(); fbx.getWorldQuaternion(srcRootInv); srcRootInv.invert();
+  const tgtRoot=new Q(); clone.getWorldQuaternion(tgtRoot); const tgtRootInv=tgtRoot.clone().invert();
+  const srcRestRel={}, tgtRelRest={};
+  for(const tn of order){ const sn=names[tn];
+    const qs=new Q(); srcBones[sn].getWorldQuaternion(qs); srcRestRel[sn]=srcRootInv.clone().multiply(qs);
+    const qt=new Q(); tgtBones[tn].getWorldQuaternion(qt); tgtRelRest[tn]=tgtRootInv.clone().multiply(qt);
+  }
+  const wpos=b=>{ const v=new V(); b.getWorldPosition(v); return v; };
+  const wqOf=b=>{ const q=new Q(); b.getWorldQuaternion(q); return q; };
+  // ── 绑定姿势下的手臂常量:锁骨/小臂=绑定本地;手=最短弧(指尖→正下);大臂记录摆动轴+绑定本地 ──
+  const constTracks=[]; const armDat={};
+  for(const [clN,upN,feN,haN] of [[CL_L,UP_L,FE_L,HA_L],[CL_R,UP_R,FE_R,HA_R]]){
+    const cl=tgtBones[clN], up=tgtBones[upN], fe=tgtBones[feN], ha=tgtBones[haN];
+    if(!cl||!up||!fe||!ha) continue;
+    for(const b of [cl,fe]){ const l=b.quaternion;
+      constTracks.push(new THREE.QuaternionKeyframeTrack(b.name+'.quaternion',[0,dur],[l.x,l.y,l.z,l.w, l.x,l.y,l.z,l.w])); }
+    const hp=wpos(ha); const dir=new V(); let cn=0;
+    ha.children.forEach(c=>{ if(c.isBone){ dir.add(wpos(c).sub(hp)); cn++; } });
+    if(cn===0) dir.set(0,-1,0); else dir.normalize();
+    const W=new Q().setFromUnitVectors(dir, new V(0,-1,0));
+    const haLoc=wqOf(fe).invert().multiply(W).multiply(wqOf(ha));
+    constTracks.push(new THREE.QuaternionKeyframeTrack(ha.name+'.quaternion',[0,dur],[haLoc.x,haLoc.y,haLoc.z,haLoc.w, haLoc.x,haLoc.y,haLoc.z,haLoc.w]));
+    const axisLocal=new V(1,0,0).applyQuaternion(wqOf(cl).invert());   // 世界横轴 → 锁骨本地(锁骨刚连躯干,摆动面随躯干)
+    armDat[upN]={ axis:axisLocal, base:up.quaternion.clone() };
+  }
+  // ── 逐帧:腿/脊柱/头 重定向 + 记录足部前后信号(模型面朝 +Z) ──
+  const mixer=new THREE.AnimationMixer(fbx); mixer.clipAction(srcClip).play();
+  const keyTimes=new Float32Array(nf), keyVals={}; order.forEach(tn=>keyVals[tn]=new Float32Array(nf*4));
+  const legSigL=new Float32Array(nf), legSigR=new Float32Array(nf);
+  const dS=new Q(), rel=new Q(), w2=new Q(), pInv=new Q(), loc=new Q(), qsW=new Q(), qsRel=new Q();
+  for(let i=0;i<nf;i++){
+    if(i===0) mixer.update(0); else mixer.update(delta);
+    fbx.updateMatrixWorld(true); keyTimes[i]=i*delta;
+    for(const tn of order){ const sn=names[tn], bone=tgtBones[tn];
+      srcBones[sn].getWorldQuaternion(qsW);
+      qsRel.copy(srcRootInv).multiply(qsW);
+      dS.copy(qsRel).multiply(srcRestRel[sn].clone().invert());
+      rel.copy(dS).multiply(tgtRelRest[tn]);
+      w2.copy(tgtRoot).multiply(rel);
+      bone.parent.updateWorldMatrix(true,false); bone.parent.getWorldQuaternion(pInv); pInv.invert();
+      loc.copy(pInv).multiply(w2);
+      bone.quaternion.copy(loc); bone.updateWorldMatrix(false,false);
+      loc.toArray(keyVals[tn], i*4);
+    }
+    clone.updateMatrixWorld(true);
+    const hp=wpos(tgtBones['CC_Base_Hip_02']);
+    legSigL[i]=wpos(tgtBones['CC_Base_L_Foot_06']).sub(hp).z;
+    legSigR[i]=wpos(tgtBones['CC_Base_R_Foot_017']).sub(hp).z;
+  }
+  mixer.stopAllAction();
+  let mxL=1e-6,mxR=1e-6; for(let i=0;i<nf;i++){ mxL=Math.max(mxL,Math.abs(legSigL[i])); mxR=Math.max(mxR,Math.abs(legSigR[i])); }
+  // ── 大臂程序化摆动:绕锁骨本地横轴,θ=sign·amp·同侧腿信号 → 与同侧腿反相 ──
+  const armAmp=(window.__armAmp!==undefined?window.__armAmp:0.5);
+  const armSign=(window.__armSign!==undefined?window.__armSign:1);
+  const swing=new Q();
+  const upTrack=(upN,sig,mx)=>{ const d=armDat[upN]; const vals=new Float32Array(nf*4);
+    for(let i=0;i<nf;i++){ swing.setFromAxisAngle(d.axis, armSign*armAmp*(sig[i]/mx));
+      const l=swing.clone().multiply(d.base); l.toArray(vals,i*4); }
+    return new THREE.QuaternionKeyframeTrack(upN+'.quaternion', keyTimes, vals); };
+  const tracks=[];
+  for(const tn of order) tracks.push(new THREE.QuaternionKeyframeTrack(tn+'.quaternion', keyTimes, keyVals[tn]));
+  tracks.push(...constTracks);
+  if(armDat[UP_L]) tracks.push(upTrack(UP_L, legSigL, mxL));
+  if(armDat[UP_R]) tracks.push(upTrack(UP_R, legSigR, mxR));
+  return new THREE.AnimationClip('walk', dur, tracks);
+}
+
+function updateNPC(dt){
+  if(!npc.ready||!npc.obj||epilogue) return;
+  // 走/停:动画权重恒 1,用 timeScale 切换(停下=极慢蠕动,不会回 T-pose)
+  if(npc.walkAction){
+    const moving = npc.activated && npc.state==='patrol';
+    npc._wk = (npc._wk||0) + ((moving?1:0.06)-(npc._wk||0))*Math.min(1,dt*5);
+    npc.walkAction.setEffectiveWeight(1);
+    npc.walkAction.timeScale=npc._wk;
+  }
+  npc.mixer.update(dt);
+  const playing = (locked || window.__testNPC) && !won;
+  if(npc.active && npc.state==='patrol'){
+    const tox0=player.pos.x-npc.pos.x, toz0=player.pos.z-npc.pos.z, pd0=Math.hypot(tox0,toz0);
+    if(!npc.activated){
+      // 待命:静立于入口附近,缓缓转身盯着玩家;玩家靠近(或已看她很近)才"活过来"
+      if(pd0>0.01){ const ty=Math.atan2(tox0,toz0)+npc.faceOff; let dy=ty-npc.yaw; while(dy>Math.PI)dy-=2*Math.PI; while(dy<-Math.PI)dy+=2*Math.PI; npc.yaw+=dy*Math.min(1,dt*1.5); npc.fwd={x:tox0/pd0,z:toz0/pd0}; }
+      if(playing && pd0<14) npc.activated=true;      // 玩家进后室走近 → 开始巡逻+捕猎
+    } else {
+      // 漫步:朝目标格滑行,朝向平滑转到移动方向
+      if(window.__poseNPC){ if(window.__poseYaw!==undefined) npc.yaw=window.__poseYaw; }
+      else {
+      const dx=npc.target.x-npc.pos.x, dz=npc.target.z-npc.pos.z, d=Math.hypot(dx,dz);
+      if(d<0.16){ npc.atCell={i:npc.nextCell.i,j:npc.nextCell.j}; npcNextStep(); }
+      else { const vx=dx/d, vz=dz/d;
+        npc.pos.x+=vx*npc.speed*dt; npc.pos.z+=vz*npc.speed*dt; npc.fwd.x=vx; npc.fwd.z=vz;
+        let ty=Math.atan2(vx,vz)+npc.faceOff, dy=ty-npc.yaw;
+        while(dy>Math.PI)dy-=2*Math.PI; while(dy<-Math.PI)dy+=2*Math.PI;
+        npc.yaw+=dy*Math.min(1,dt*6);
+      }
+      // 视锥检测(只在游戏中累积)
+      if(playing){
+        const tox=player.pos.x-npc.pos.x, toz=player.pos.z-npc.pos.z, pd=Math.hypot(tox,toz);
+        let seen=false;
+        if(pd<npc.visRange && pd>0.01){ const ndx=tox/pd, ndz=toz/pd;
+          if(ndx*npc.fwd.x+ndz*npc.fwd.z > npc.visCos && !sightBlocked(npc.pos.x,npc.pos.z,player.pos.x,player.pos.z)) seen=true; }
+        const closer=1-Math.min(1,pd/npc.visRange);
+        if(seen) npc.detect+=dt*(0.35+0.85*closer); else npc.detect-=dt*0.55;
+        npc.detect=Math.max(0,Math.min(1,npc.detect));
+        if(npc.detect>=1) npcCaught();
+        if(pd>30){ npc.lostT+=dt; if(npc.lostT>7) npcReappearNear(); } else npc.lostT=0;   // 走失太久→在附近再现
+      }
+      }
+    }
+  }
+  // 碰撞消解(每帧,含待命/传送落点):被柱子/隔断/道具/关门挡住 → 推开;推不动累计 1s 自动改道
+  { const rc=npcCollide(npc.pos.x, npc.pos.z); npc.pos.x=rc[0]; npc.pos.z=rc[1]; }
+  if(npc.activated && npc.state==='patrol' && !window.__poseNPC){
+    const d2t=Math.hypot(npc.target.x-npc.pos.x, npc.target.z-npc.pos.z);
+    if(npc._lastD===undefined || d2t>npc._lastD+0.5 || d2t<npc._lastD-0.01){ npc._lastD=d2t; npc.blockT=0; }
+    else { npc.blockT=(npc.blockT||0)+dt;
+      if(npc.blockT>1.0){ npc.blockT=0; npc._lastD=undefined; npcNextStep(); } }
+  }
+  npc.obj.position.set(npc.pos.x, npc.yOff, npc.pos.z); npc.obj.rotation.y=npc.yaw;
+  // 电视头:跟随身体(固定高度;骨骼有 ×100 嵌套缩放,世界坐标不可直接用),屏幕雪花 + 冷光闪烁
+  if(tvHead){
+    tvT+=dt;
+    const hy=(window.__thy!==undefined?window.__thy:tvHeadY);
+    tvHead.visible=true; tvHead.position.set(npc.pos.x, hy, npc.pos.z); tvHead.rotation.y=npc.yaw;
+    if((tvT*60|0)%2===0) drawTVStatic();
+    tvGlow.position.set(npc.pos.x, hy, npc.pos.z);
+    tvGlow.intensity = 0.55 + Math.sin(tvT*7)*0.15 + (Math.random()<0.04?-0.45:0);
+  }
+  // 声音 + 红晕
+  if(audio){
+    npcSound();
+    if(npc.snd){ const pd=Math.hypot(player.pos.x-npc.pos.x, player.pos.z-npc.pos.z);
+      if(npc.snd.pan.positionX){ npc.snd.pan.positionX.value=npc.pos.x; npc.snd.pan.positionY.value=1.4; npc.snd.pan.positionZ.value=npc.pos.z; }
+      else npc.snd.pan.setPosition(npc.pos.x,1.4,npc.pos.z);
+      npc.snd.g.gain.value=0.015 + Math.max(0,1-pd/16)*0.42;
+      const L=audio.ctx.listener, fx=-Math.sin(player.yaw), fz=-Math.cos(player.yaw);
+      if(L.positionX){ L.positionX.value=player.pos.x; L.positionY.value=EYE; L.positionZ.value=player.pos.z; L.forwardX.value=fx; L.forwardY.value=0; L.forwardZ.value=fz; L.upX.value=0; L.upY.value=1; L.upZ.value=0; }
+      else { L.setPosition(player.pos.x,EYE,player.pos.z); L.setOrientation(fx,0,fz,0,1,0); }
+    }
+    if(npc.detect>0.12){ npc.hbT-=dt; if(npc.hbT<=0){ npcHeartbeat(0.05+npc.detect*0.35); npc.hbT=0.92-npc.detect*0.58; } }
+  }
+  if(dreadEl) dreadEl.style.opacity=Math.max(npc.detect*0.78, sanFear*0.55).toFixed(3);
+}
+
+/* ============================================================
+   造景道具:静态模型,稀疏「单摆」(泳池是唯一整间地标)
+   ============================================================ */
+const propLoader=new GLTFLoader();
+window.__props=[]; const bobProps=[];
+function pushOutOfWalls(cx, cz, hx, hz){   // 把足迹盒 [cx±hx, cz±hz] 沿最小重叠推出所有墙 AABB,消除穿模
+  for(let it=0; it<5; it++){
+    let moved=false;
+    const ci=Math.floor((cx+WORLD_W/2)/CELL), cj=Math.floor((cz+WORLD_H/2)/CELL);
+    for(let dci=-2;dci<=2;dci++)for(let dcj=-2;dcj<=2;dcj++){
+      const arr=grid.get(gkey(ci+dci,cj+dcj)); if(!arr) continue;
+      for(const a of arr){ if(a.disabled) continue;
+        const ox=Math.min(cx+hx,a.maxX)-Math.max(cx-hx,a.minX);
+        const oz=Math.min(cz+hz,a.maxZ)-Math.max(cz-hz,a.minZ);
+        if(ox>0.002 && oz>0.002){
+          if(ox<=oz) cx += (cx<(a.minX+a.maxX)/2)?-ox:ox;
+          else       cz += (cz<(a.minZ+a.maxZ)/2)?-oz:oz;
+          moved=true;
+        }
+      }
+    }
+    if(!moved) break;
+  }
+  return [cx,cz];
+}
+function spawnProp(url, wx, wz, o){
+  o=o||{};
+  propLoader.load(url,(g)=>{
+    const root=g.scene;
+    if(o.rotX) root.rotation.x=o.rotX;
+    root.updateMatrixWorld(true);
+    let box=new THREE.Box3().setFromObject(root), sz=new THREE.Vector3(); box.getSize(sz);
+    const s = o.footprint ? o.footprint/Math.max(sz.x,sz.z,0.01) : (o.h||1)/Math.max(sz.y,0.01);
+    root.scale.set(s, s*(o.sy||1), s);
+    if(o.rotY!==undefined) root.rotation.y=o.rotY;
+    root.updateMatrixWorld(true);
+    box=new THREE.Box3().setFromObject(root); const c=new THREE.Vector3(); box.getCenter(c); box.getSize(sz);
+    root.position.x += wx-c.x; root.position.z += wz-c.z; root.position.y += -box.min.y + (o.yOff||0);
+    root.traverse(m=>{ if(m.isMesh){ m.frustumCulled=false; (Array.isArray(m.material)?m.material:[m.material]).forEach(mm=>{ if(mm){ mm.fog=true; if(mm.metalness!==undefined) mm.metalness=Math.min(mm.metalness,0.4); } }); } });
+    scene.add(root); root.updateMatrixWorld(true);
+    // 推出墙体:算实际包围盒,若戳进墙就推开,消除穿模
+    { let fb2=new THREE.Box3().setFromObject(root), c2=new THREE.Vector3(), s2=new THREE.Vector3(); fb2.getCenter(c2); fb2.getSize(s2);
+      const np=pushOutOfWalls(c2.x, c2.z, s2.x/2+0.05, s2.z/2+0.05);
+      root.position.x += np[0]-c2.x; root.position.z += np[1]-c2.z; root.updateMatrixWorld(true);
+      wx=np[0]; wz=np[1]; }
+    if(o.collide){ const fb=new THREE.Box3().setFromObject(root); const pad=o.pad||0; addAABB({minX:fb.min.x+pad,maxX:fb.max.x-pad,minZ:fb.min.z+pad,maxZ:fb.max.z-pad}); }
+    if(o.bob){ root.userData.baseY=root.position.y; root.userData.bobPh=wx*0.7+wz; bobProps.push(root); }
+    window.__props.push({label:o.label||url, x:wx, z:wz, root});
+  }, undefined, e=>console.warn('prop fail',url,e));
+}
+function wallSpot(i,j){   // 把贴墙道具放到有墙的一侧,朝向房间内部
+  const cc=cellCenter(i,j), off=CELL/2-0.42;
+  if(hw[i][j])   return {x:cc.x, z:cc.z-off, rotY:0};          // 北墙(-z)→朝 +z
+  if(hw[i][j+1]) return {x:cc.x, z:cc.z+off, rotY:Math.PI};    // 南墙(+z)→朝 -z
+  if(vw[i][j])   return {x:cc.x-off, z:cc.z, rotY:Math.PI/2};  // 西墙(-x)→朝 +x
+  if(vw[i+1][j]) return {x:cc.x+off, z:cc.z, rotY:-Math.PI/2}; // 东墙(+x)→朝 -x
+  return {x:cc.x, z:cc.z, rotY:0};
+}
+function placeProps(){
+  const inR=(i,j,r)=>r&&i>=r.i0&&i<r.i0+r.w&&j>=r.j0&&j<r.j0+r.h;
+  const corr=[], room=[], dead=[], any=[];
+  for(let i=1;i<GW-1;i++)for(let j=1;j<GH-1;j++){
+    const cc=cellCenter(i,j);
+    if(cc.z<INTRO_ZC+CELL) continue;                 // 跳过开场区
+    if(inR(i,j,spawnRoom)) continue;
+    const nb=npcOpenNeighbors(i,j); if(nb.length===0) continue;
+    const rec={i,j,cc,nb}; any.push(rec);
+    if(cellType[i][j]===CORR) corr.push(rec); else if(cellType[i][j]===ROOM) room.push(rec);
+    if(nb.length===1) dead.push(rec);
+  }
+  const used=[], usedByLabel={};
+  function grab(pools, label){                        // 找位:全局间隔>4m,且同类间隔>18m(避免同一空间出现两个同款)
+    const same=usedByLabel[label]||(usedByLabel[label]=[]);
+    for(const pool of pools){ for(let t=0;t<40;t++){ if(!pool.length) break;
+      const c=pool[(rnd()*pool.length)|0];
+      if(used.every(u=>Math.hypot(u.cc.x-c.cc.x,u.cc.z-c.cc.z)>3.5)
+         && same.every(u=>Math.hypot(u.cc.x-c.cc.x,u.cc.z-c.cc.z)>14)){ used.push(c); same.push(c); return c; } } }
+    return null;
+  }
+  // 稀疏单摆(泳池间单独构建)——数量调多、优先玩家必经的走廊/房间,减少空房感
+  const jobs=[
+    ['assets/prop_vending.glb', {h:2.0,  collide:true, wall:true, label:'vending'}, 6, [room,corr,any]],
+    ['assets/prop_swing.glb',   {h:2.3,  collide:true, label:'swing'}, 3, [room,any]],
+    ['assets/prop_bear.glb',    {h:1.4,  collide:true, label:'bear'}, 5, [room,corr,any]],
+    ['assets/prop_foldchairs.glb',{h:0.95,collide:true, label:'foldchairs'}, 5, [room,corr,any]],
+    ['assets/prop_tv.glb',      {h:0.75, collide:true, label:'tv'}, 8, [corr,room,any]],
+    ['assets/prop_duck.glb',    {h:0.8,  collide:false, label:'duck'}, 8, [corr,any,room]],
+    ['assets/prop_balloons.glb',{h:1.8,  collide:false, bob:true, yOff:0.5, label:'balloons'}, 7, [dead,corr,any]],
+  ];
+  // 守门道具:出口门外固定放一件(「先有世界,再有纸条」——地标线索的硬保证)
+  window.__guardian=null;
+  { const es=doorSlots.find(s=>s.isExit);
+    if(es && inb(es.out[0],es.out[1])){
+      const oc=cellCenter(es.out[0],es.out[1]);
+      const gJob=pickA(jobs.filter(j=>['vending','bear','tv','duck','balloons'].includes(j[1].label)));
+      const px=es.axis==='H'?es.along:es.line, pz=es.axis==='H'?es.line:es.along;
+      let gx,gz; if(es.axis==='H'){ gx=px+(rnd()<0.5?-1.3:1.3); gz=oc.z; } else { gx=oc.x; gz=pz+(rnd()<0.5?-1.3:1.3); }
+      const gOpt=Object.assign({},gJob[1]); delete gOpt.wall;
+      spawnProp(gJob[0], gx, gz, Object.assign(gOpt,{rotY:rnd()*Math.PI*2}));
+      window.__guardian={label:gOpt.label, x:gx, z:gz};
+      used.push({cc:{x:gx,z:gz}}); (usedByLabel[gOpt.label]=usedByLabel[gOpt.label]||[]).push({cc:{x:gx,z:gz}});
+    } }
+  for(const [url,opt,count,pools] of jobs){
+    for(let n=0;n<count;n++){
+      const c=grab(pools, opt.label); if(!c) break;
+      let wx=c.cc.x, wz=c.cc.z, rotY=(rnd()*Math.PI*2);
+      if(opt.wall){ const w=wallSpot(c.i,c.j); wx=w.x; wz=w.z; rotY=w.rotY; }
+      spawnProp(url, wx, wz, Object.assign({rotY}, opt));
+    }
+  }
+  // 气球门:横跨走廊,玩家从下穿过(按走廊轴向旋转)
+  let archN=6, tries=0; const archSame=usedByLabel['arch']=usedByLabel['arch']||[];
+  while(archN>0 && tries++<300 && corr.length){
+    const c=corr[(rnd()*corr.length)|0];
+    if(!used.every(u=>Math.hypot(u.cc.x-c.cc.x,u.cc.z-c.cc.z)>3.5)){ continue; }
+    if(!archSame.every(u=>Math.hypot(u.cc.x-c.cc.x,u.cc.z-c.cc.z)>14)){ continue; }
+    const openNS=c.nb.some(([i,j])=>j!==c.j), openEW=c.nb.some(([i,j])=>i!==c.i);
+    const rotY=(openEW && !openNS)?Math.PI/2:0;
+    used.push(c); archSame.push(c); spawnProp('assets/prop_arch.glb', c.cc.x, c.cc.z, {h:2.7, collide:false, rotY, label:'arch'}); archN--;
+  }
+}
+placeProps();
+
+/* ---------- 锚点纸条:钉在开场走廊尽头、铁门旁的墙上(铁律一:门上的字永远真;读它免费) ---------- */
+{
+  const ax=INTRO_X+1.30, az=INTRO_ZC-0.155;
+  const pc=document.createElement('canvas'); pc.width=48; pc.height=64; const pg=pc.getContext('2d');
+  pg.fillStyle='#e9e2cc'; pg.fillRect(0,0,48,64);
+  pg.strokeStyle='#8a8066'; pg.lineWidth=1;
+  for(let y=13;y<56;y+=9){ pg.beginPath(); pg.moveTo(7,y); pg.lineTo(41,y); pg.stroke(); }
+  pg.fillStyle='#6e2b24'; pg.fillRect(21,3,6,6);                       // 一颗锈图钉
+  const pt=new THREE.CanvasTexture(pc); pt.colorSpace=THREE.SRGBColorSpace;
+  const paper=new THREE.Mesh(new THREE.PlaneGeometry(0.24,0.32), new THREE.MeshBasicMaterial({map:pt,fog:true}));
+  paper.position.set(ax,1.42,az); paper.rotation.y=Math.PI; paper.rotation.z=0.06; scene.add(paper);
+  window.__props.push({label:'anchor', x:ax, z:INTRO_ZC-0.7, root:paper});
+}
+
+/* ---------- 入口同伴:锚点点名的可信道具,必刷在迷宫入口附近(玩家立刻有一个"能信的东西") ---------- */
+{
+  const _cs=initClueSys();
+  if(_cs){
+    const OPTS={duck:{h:0.8},balloons:{h:1.8,bob:true,yOff:0.5},arch:{h:2.7},tv:{h:0.75,collide:true},foldchairs:{h:0.95,collide:true},bear:{h:1.4,collide:true},vending:{h:2.0,collide:true},swing:{h:2.3,collide:true}};
+    let spot=null;
+    for(let j=1;j<=3&&!spot;j++)for(let di=-2;di<=2;di++){
+      const i=INTRO_CI+di; if(!inb(i,j)) continue;
+      if(npcOpenNeighbors(i,j).length>0){ spot=cellCenter(i,j); break; }
+    }
+    if(spot) spawnProp('assets/prop_'+_cs.anchorType+'.glb', spot.x, spot.z,
+      Object.assign({rotY:rnd()*Math.PI*2,label:_cs.anchorType}, OPTS[_cs.anchorType]||{h:1}));
+  }
+}
+
+/* ---------- 泳池间 Poolrooms:白瓷砖 + 冷色灯光 + 真实水面 ---------- */
+function poolTileTex(){
+  const c=document.createElement('canvas'); c.width=c.height=256; const x=c.getContext('2d');
+  x.fillStyle='#e7eff1'; x.fillRect(0,0,256,256);
+  x.strokeStyle='#b0c3c7'; x.lineWidth=5; const n=4, s=256/n;
+  for(let i=0;i<=n;i++){ x.beginPath(); x.moveTo(i*s,0); x.lineTo(i*s,256); x.moveTo(0,i*s); x.lineTo(256,i*s); x.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.colorSpace=THREE.SRGBColorSpace; t.wrapS=t.wrapT=THREE.RepeatWrapping; t.anisotropy=8; return t;
+}
+const waterMat=new THREE.ShaderMaterial({ transparent:true, uniforms:{t:{value:0}},
+  vertexShader:'varying vec2 vUv; void main(){ vUv=uv; gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0); }',
+  fragmentShader:'uniform float t; varying vec2 vUv; void main(){ vec2 p=vUv*vec2(9.0,11.0); float w=(sin(p.x*3.0+t*1.3)+sin(p.y*3.7-t*1.1)+sin((p.x+p.y)*2.2+t*0.7))/3.0*0.5+0.5; float c=pow(max(0.0,sin(p.x*5.0+t)*sin(p.y*4.6-t*1.2)),3.0); vec3 deep=vec3(0.02,0.16,0.21), shallow=vec3(0.26,0.62,0.64); vec3 col=mix(deep,shallow,w*0.7)+c*vec3(0.45,0.8,0.8); gl_FragColor=vec4(col,0.86); }'
+});
+window.__water=null;
+function buildPoolRoom(){
+  if(!poolRoom) return; const r=poolRoom;
+  const x0=r.i0*CELL-WORLD_W/2, x1=(r.i0+r.w)*CELL-WORLD_W/2, z0=r.j0*CELL-WORLD_H/2, z1=(r.j0+r.h)*CELL-WORLD_H/2;
+  const cx=(x0+x1)/2, cz=(z0+z1)/2, rw=x1-x0, rd=z1-z0, H=WALL_H;
+  const mkP=(w,h,map,color,rough,side)=>{ const mt=map?{map,color,roughness:rough}:{color,roughness:rough}; if(side)mt.side=side; return new THREE.Mesh(new THREE.PlaneGeometry(w,h), new THREE.MeshStandardMaterial(mt)); };
+  const tf=poolTileTex(); tf.repeat.set(rw/1.2,rd/1.2);
+  const fl=mkP(rw,rd,tf,0xdfe8ea,0.5); fl.rotation.x=-Math.PI/2; fl.position.set(cx,0.02,cz); scene.add(fl);        // 白瓷砖地
+  const cl=mkP(rw,rd,null,0xcfeaf0,0.85); cl.rotation.x=Math.PI/2; cl.position.set(cx,H-0.01,cz); scene.add(cl);   // 冷色顶
+  const wall=(w,x,y,z,ry)=>{ const wt=poolTileTex(); wt.repeat.set(w/1.2,H/1.2); const m=mkP(w,H,wt,0xdfe8ea,0.55,THREE.DoubleSide); m.position.set(x,y,z); m.rotation.y=ry; scene.add(m); };
+  const ins=0.18, yc=H/2;                                                                                          // 3 面贴白瓷砖(留门那面);要盖过墙厚(WALL_T/2)所以内移 0.18
+  if(poolDoorSide!=='N') wall(rw, cx, yc, z0+ins, 0);
+  if(poolDoorSide!=='S') wall(rw, cx, yc, z1-ins, Math.PI);
+  if(poolDoorSide!=='W') wall(rd, x0+ins, yc, cz, Math.PI/2);
+  if(poolDoorSide!=='E') wall(rd, x1-ins, yc, cz, -Math.PI/2);
+  const mg=Math.min(1.7, Math.min(rw,rd)*0.16), ww=rw-mg*2, wd=rd-mg*2;                                            // 泳池:留一圈瓷砖走道
+  const bt=poolTileTex(); bt.repeat.set(ww,wd);
+  const bot=mkP(ww,wd,bt,0x2b6d77,0.4); bot.rotation.x=-Math.PI/2; bot.position.set(cx,0.05,cz); scene.add(bot);   // 深蓝池底
+  const water=new THREE.Mesh(new THREE.PlaneGeometry(ww,wd), waterMat); water.rotation.x=-Math.PI/2; water.position.set(cx,0.17,cz); scene.add(water); window.__water=water;
+  addAABB({minX:cx-ww/2,maxX:cx+ww/2,minZ:cz-wd/2,maxZ:cz+wd/2});                                                  // 不能走进水里
+  for(let k=0;k<6;k++){ const L=new THREE.PointLight(0xcdf3ff,2.6,Math.max(rw,rd)*0.95,1.5); L.position.set(cx+((k%3)-1)*rw*0.32, H-0.3, cz+((k<3)?-1:1)*rd*0.3); scene.add(L); }
+  const wg=new THREE.PointLight(0x5fe0f0,2.0,Math.max(rw,rd),1.8); wg.position.set(cx,0.5,cz); scene.add(wg);          // 水下辉光
+  for(let a=0;a<3;a++)for(let b=0;b<3;b++){ const pn=new THREE.Mesh(new THREE.PlaneGeometry(1.6,0.6), new THREE.MeshBasicMaterial({color:0xeafdff,fog:true})); pn.rotation.x=Math.PI/2; pn.position.set(cx+(a-1)*rw*0.3, H-0.02, cz+(b-1)*rd*0.3); scene.add(pn); }
+  window.__poolC={x:cx,z:cz};
+}
+// buildPoolRoom() 已停用(泳池间删除,精简地图)
+
+/* ============================================================
+   主循环
+   ============================================================ */
+const statText=document.getElementById('statText');
+const objText=document.getElementById('objText');
+const clock=new THREE.Clock();
+const t0=performance.now();
+let flkT=0, hudT=0;
+// San 生存
+let san=100, fainting=false, sanFear=0, sanEffT=0;
+let stillX=1e9, stillZ=1e9, stillT=0;   // 原地静止计时(蹲灯惩罚)
+const sanEl=document.getElementById('san'), sanFillEl=document.querySelector('#san .bar i');
+window.__sanCost=(n)=>{ san=Math.max(0,san-n); };   // 供 ④ 读纸条等交互扣 san
+
+function animate(){
+  requestAnimationFrame(animate);
+  const dt=Math.min(0.05, clock.getDelta());
+  if(paused || (started && !locked && !won)){ renderer.render(scene, camera); return; }   // 读纸条/解锁暂停时冻结世界
+
+  // 朝向
+  yaw.rotation.y=player.yaw; pitch.rotation.x=player.pitch;
+
+  // 移动输入
+  let ix=0, iz=0;
+  if(locked && !won){
+    if(keys['KeyW'])iz-=1; if(keys['KeyS'])iz+=1;
+    if(keys['KeyA'])ix-=1; if(keys['KeyD'])ix+=1;
+  }
+  const run = keys['ShiftLeft']||keys['ShiftRight'];
+  const speed=(run?3.9:2.3)*(epilogue?1.7:1);   // 梦境小路提速,不用一直按 Shift
+  const len=Math.hypot(ix,iz)||1; ix/=len; iz/=len;
+  const sn=Math.sin(player.yaw), cs=Math.cos(player.yaw);
+  // 世界方向：前=-Z(相机看向-Z)
+  const wx=(ix*cs + iz*sn), wz=(iz*cs - ix*sn);   // 相机相对:跟随当前朝向
+  const mv=(Math.abs(ix)+Math.abs(iz))>0;
+  player.moving=mv;
+
+  let npx=player.pos.x + wx*speed*dt;
+  let npz=player.pos.z + wz*speed*dt;
+  if(epilogue){
+    // 梦境旷野:无墙,限制在穹顶半径内 + 贴地行走(射线取地形高度)
+    const c=window.__dreamC;
+    if(c){ const ddx=npx-c.x, ddz=npz-c.z, dr=Math.hypot(ddx,ddz);
+      if(dr>c.r){ npx=c.x+ddx/dr*c.r; npz=c.z+ddz/dr*c.r; } }
+    player.pos.x=npx; player.pos.z=npz;
+    const gy=dreamGroundY(npx,npz);
+    if(gy!==null) player.pos.y += (gy+EYE-player.pos.y)*Math.min(1,dt*9);
+  } else {
+    [npx,npz]=collide(npx,npz);
+    [npx,npz]=collideGLB(npx,npz);
+    player.pos.x=npx; player.pos.z=npz;
+  }
+
+  // 头部摆动 + 脚步
+  if(mv){ player.bob += dt*(run?13:9); player.sinceStep+=dt*(run?1.5:1);
+    if(player.sinceStep>0.42){ player.sinceStep=0; player.steps++; } }   // 脚步声改用真实采样循环(voLoops)
+  else { player.bob += dt*2; }
+  const bobY=Math.sin(player.bob)*(mv?0.045:0.012);
+  const roll=Math.cos(player.bob*0.5)*(mv?0.010:0.003);
+  if(!window.__dbg){
+    yaw.position.set(player.pos.x, (epilogue?player.pos.y:EYE)+bobY, player.pos.z);
+    camera.position.set(0,0,0);
+    camera.rotation.z=roll;
+  }
+
+  // 灯光闪烁(全局压暗,靠点光在亮灯下形成光池)
+  flkT+=dt;
+  const glob=0.92+Math.sin(flkT*3.1)*0.02+(rnd()<0.006?-0.3:0);
+  hemi.intensity=0.55*glob; ambient.intensity=0.14*glob;
+  for(const p of panels){ if(p.userData.flick){
+    const on = (Math.sin(flkT*22+p.position.x)*0.5+0.5) > (0.35+0.4*Math.sin(flkT*0.7+p.position.z));
+    p.userData.on=on; p.material.color.setScalar(on? p.userData.base : 0.10);
+    if(!on && rnd()<0.02) flickerTick();
+  } else { p.userData.on=true; p.material.color.setScalar(p.userData.base*glob); } }
+  // 动态点光源:跟随最近的「亮着的」面板 → 亮灯下有光池,灭/无灯处发暗
+  panelPositions.sort((a,b)=>((a.position.x-player.pos.x)**2+(a.position.z-player.pos.z)**2)-((b.position.x-player.pos.x)**2+(b.position.z-player.pos.z)**2));
+  for(let k=0;k<dynLights.length;k++){ const p=panelPositions[k]; if(p){ dynLights[k].position.set(p.position.x,WALL_H-0.25,p.position.z); dynLights[k].intensity = p.userData.on ? 1.4*glob : 0.0; } }
+  // 开场走廊:2 盏忽闪忽灭的灯(不规则通断 + 快速回落,配合电流嗡响)
+  for(const fl of introFlickers){
+    fl.t-=dt;
+    if(fl.t<=0){ fl.on = rnd()<0.62; fl.t = fl.on ? (0.06+rnd()*0.85) : (0.03+rnd()*0.32); if(fl.on && rnd()<0.35) flickerTick(); }
+    const tgt = fl.on ? (0.7+rnd()*0.3) : 0.0;
+    fl.cur += (tgt-fl.cur)*Math.min(1,dt*32);
+    const b=fl.base, r=((b>>16)&255)/255, g=((b>>8)&255)/255, bl=(b&255)/255, k=0.05+0.95*fl.cur;
+    fl.panel.material.color.setRGB(r*k+0.05*(1-fl.cur), g*k+0.045*(1-fl.cur), bl*k+0.03*(1-fl.cur));
+    fl.light.intensity = fl.cur*2.6;
+  }
+
+  // San 生存:暗处流失,灯下「站着」回复,低 san 画面扭曲+心跳,归零晕倒回出生房
+  const playingSan = (locked||window.__testNPC) && !won && !escaping && !fainting && !epilogue;
+  if(playingSan){
+    let inLight=false;
+    for(const p of panels){ if(p.userData.on && Math.hypot(p.position.x-player.pos.x, p.position.z-player.pos.z)<2.9){ inLight=true; break; } }
+    if(inLight){ if(!player.moving) san += 5.0*dt; }                 // 站在亮灯下才回
+    else { const run=keys['ShiftLeft']||keys['ShiftRight']; san -= 0.8*(run?1.4:1.0)*dt; }
+    san=Math.max(0,Math.min(100,san));
+    if(san<=0) sanFaint();
+    // 原地静止太久(如灯下蹲san) → 它会注意到你,刷到身边开始捕猎
+    if(Math.hypot(player.pos.x-stillX, player.pos.z-stillZ)>2.2){ stillX=player.pos.x; stillZ=player.pos.z; stillT=0; }
+    else { stillT+=dt;
+      if(stillT>3 && npc.ready){ if(npcPunishNear()) flash('你在原地待得太久了。\n有什么东西注意到了你。'); stillT=-10; } }   // 静止3s即引怪,-10=触发后的宽限
+  }
+  // ---- 配音:按游戏状态驱动各循环的目标音量(voTick 里做渐入渐出) ----
+  {
+    const act=(locked||window.__testNPC)&&!won&&!paused&&!fainting;
+    const _mv=player.moving, _run=(keys['ShiftLeft']||keys['ShiftRight'])&&_mv;
+    voLoops.walk.t      = act&&_mv&&!_run ? 0.78 : 0;                 // 正常走路
+    voLoops.run.t       = act&&_mv&&_run  ? 0.85 : 0;                 // 跑步脚步
+    voLoops.breathRun.t = act&&_mv&&_run  ? 0.38 : 0;                 // 跑步呼吸
+    if(act&&!_mv&&!epilogue) voIdleT+=dt; else voIdleT=0;             // 原地>1s(读纸条 paused 不计时)
+    voLoops.breathIdle.t = voIdleT>1.0 ? 0.5 : 0;                     // 加重呼吸
+    let mT=0;
+    if(act&&!epilogue&&npc.ready&&npc.obj&&npc.obj.visible){          // 怪物贴近:音量随距离 18m→4m 渐强
+      const d=Math.hypot(npc.pos.x-player.pos.x, npc.pos.z-player.pos.z);
+      mT=Math.max(0,Math.min(1,(18-d)/14))*0.85;
+    }
+    voLoops.monster.t = mT;
+    voLoops.dream.t   = (epilogue&&!dreamLeaving) ? 0.5 : 0;          // 梦境背景音
+    if(act&&_mv&&!_run&&!epilogue){                                   // 走路呼吸:偶发(18~35s 一次)
+      voWalkBreathT+=dt;
+      if(voWalkBreathT>voWalkBreathNext){ voWalkBreathT=0; voWalkBreathNext=18+rnd()*17; voPlay('breathWalk',0.3); }
+    }
+    voTick(dt);
+  }
+  sanFear = san<40 ? (40-san)/40 : 0;                                // 0..1 恐慌度
+  npc.visRange = 11 + sanFear*5;                                     // 低 san → TV Woman 视野更大
+  if(sanFear>0){
+    renderer.domElement.style.filter = `saturate(${(1-sanFear*0.7).toFixed(2)}) contrast(${(1+sanFear*0.15).toFixed(2)}) brightness(${(1-sanFear*0.18).toFixed(2)})`;
+    if(san<30){ sanEffT-=dt; if(sanEffT<=0){ npcHeartbeat(0.05+sanFear*0.3); sanEffT=0.95-sanFear*0.5; } }
+  } else if(renderer.domElement.style.filter){ renderer.domElement.style.filter=''; }
+  if(sanEl){ sanEl.style.opacity=((locked||window.__testNPC)&&!won&&!epilogue)?'1':'0';
+    if(sanFillEl){ sanFillEl.style.width=san.toFixed(0)+'%';
+      if(sanFear>0){ const pl=(10+Math.abs(Math.sin(flkT*6))*sanFear*16)|0; sanFillEl.style.boxShadow='0 0 '+pl+'px rgba(255,64,54,'+(0.7+sanFear*0.3).toFixed(2)+')'; }
+      else sanFillEl.style.boxShadow='0 0 12px rgba(226,50,45,.75)'; } }
+
+  // HUD
+  hudT+=dt; if(hudT>0.2){ hudT=0;
+    const secs=(performance.now()-t0)/1000;
+    statText.textContent = `步数 ${player.steps}   用时 ${secs.toFixed(0)}s`;
+    let nd=1e9; for(const d of doors){ const dd=Math.hypot(player.pos.x-d.cx,player.pos.z-d.cz); if(dd<nd)nd=dd; }
+    let np=1e9; for(const p of (window.__props||[])){ const dd=Math.hypot(player.pos.x-p.x,player.pos.z-p.z); if(dd<np)np=dd; }
+    if(epilogue) objText.innerHTML='沿着小路,<b style="color:#dff1ff">走进那扇黑色的门</b>';
+    else if(nd<3.2 && nd<=np) objText.innerHTML='<b style="color:#cfe0ff">按 空格 开门</b>';
+    else if(np<2.6) objText.innerHTML='<b style="color:#cfe0ff">按 空格 读纸条</b>(消耗 San)';
+    else objText.innerHTML='目标:<b style="color:#fff2a8">找到出口,逃离这里</b>';
+  }
+  // 首次进入 GLB 提示
+  if(glbRegion && !win._hintGlb){ const dG=Math.hypot(player.pos.x-glbRegion.cx,player.pos.z-glbRegion.cz);
+    if(dG<glbRegion.r){ win._hintGlb=true; flash('这里的墙…是真的。\n有人来过。'); } }
+
+  // 门开合动画(两扇绕各自铰链对开)
+  for(const d of doors){ if(d.animating){ let done=true;
+    for(const p of d.parts){ const tgt=d.open?p.openA:0, dif=tgt-p.pivot.rotation.y;
+      if(Math.abs(dif)>0.01){ p.pivot.rotation.y+=Math.sign(dif)*Math.min(Math.abs(dif),dt*2.8); done=false; } else p.pivot.rotation.y=tgt; }
+    if(done) d.animating=false; } }
+  // 裁剪门(消防门)的裁剪面随扇转动更新
+  for(const d of doors) for(const p of d.parts){ if(p.clipLocal){ p.pivot.updateWorldMatrix(true,false); p.clipWorld.copy(p.clipLocal).applyMatrix4(p.pivot.matrixWorld); } }
+
+  updateNPC(dt);   // 恐怖 NPC:漫步 + 视锥检测
+  // 梦境尾声:踏进黑色门洞的判定区 = 穿过门 → 回到最初的房间
+  if(epilogue && window.__dreamGate){
+    const g=window.__dreamGate, px=player.pos.x, pz=player.pos.z;
+    if(px>g.minX && px<g.maxX && pz>g.minZ && pz<g.maxZ) dreamExit();
+  }
+  for(const p of bobProps){ p.position.y = p.userData.baseY + Math.sin(flkT*1.4 + p.userData.bobPh)*0.09; }  // 气球轻浮
+  if(window.__water) window.__water.material.uniforms.t.value += dt*0.9;   // 水面波纹
+
+  renderer.render(scene, camera);
+}
+animate();
+
+/* 调试桥接：预览/优化用。__BR.tp(x,z) 传送；__BR.look(yaw,pitch)；__BR.top() 俯瞰 */
+window.__BR = {
+  scene, camera, player, cellType, rooms, CELL, GW, GH, WORLD_W, WORLD_H, col:collide, aabbs:wallAABBs, get glbRegion(){return glbRegion;},
+  tp(x,z){ player.pos.x=x; player.pos.z=z; },
+  look(y,p){ player.yaw=y; if(p!==undefined) player.pitch=p; },
+  top(){ window.__dbg=true; ceil.visible=false; panels.forEach(p=>p.visible=false); camera.position.set(0,0,0); yaw.position.set(0, 130, 0); yaw.rotation.y=0; pitch.rotation.x=-Math.PI/2; camera.rotation.z=0; camera.far=400; camera.updateProjectionMatrix(); scene.fog.density=0.0006; },
+  play(){ window.__dbg=false; ceil.visible=true; panels.forEach(p=>p.visible=true); scene.fog.density=0.05; camera.far=300; camera.updateProjectionMatrix(); },
+  spec(){ if(glbRegion){ player.pos.x=glbRegion.cx; player.pos.z=glbRegion.cz+glbRegion.r+1; player.yaw=Math.PI; } },
+  npc,
+  npcNear(dist=6){ npc.pos.set(player.pos.x, 0, player.pos.z - dist); const c=Math.floor((npc.pos.x+WORLD_W/2)/CELL), r=Math.floor((npc.pos.z+WORLD_H/2)/CELL); npc.atCell={i:c,j:r}; npc.prevCell={i:-1,j:-1}; npc.fwd={x:0,z:1}; npcNextStep(); return 'npc moved near you'; },
+  npcFace(o){ npc.faceOff=o; return 'faceOff='+o; },
+  get detect(){ return npc.detect; },
+  props(){ return window.__props.map((p,i)=>i+':'+p.label+' ('+p.x.toFixed(0)+','+p.z.toFixed(0)+')').join('  '); },
+  propTP(i){ const p=window.__props[i]; if(p){ player.pos.x=p.x; player.pos.z=p.z+3.2; player.yaw=Math.PI; return 'at '+p.label; } return 'none'; },
+  poolTP(){ if(window.__poolC){ player.pos.x=window.__poolC.x; player.pos.z=window.__poolC.z; player.pos.y=EYE; return 'at pool '+window.__poolC.x.toFixed(0)+','+window.__poolC.z.toFixed(0); } return 'no pool'; },
+  get san(){ return san; }, setSan(v){ san=Math.max(0,Math.min(100,v)); return san; },
+  get exitAt(){ return window.__exitAt||null; },
+  note(l){ const p=(window.__props||[]).find(x=>x.label===l); return p?noteFor(p):'no prop '+l; },   // 用真实道具实例(纸条固定性可验证)
+  clues(){ const c=initClueSys(); return c?{ex:+c.ex.toFixed(1),ez:+c.ez.toFixed(1),deep:c.deep,left:c.left,liars:[...c.liars],anchor:c.anchorType,guardian:window.__guardian}:null; },
+  punish(){ return npcPunishNear() ? ('npc at '+npc.pos.x.toFixed(0)+','+npc.pos.z.toFixed(0)+' activated='+npc.activated+' dist='+Math.hypot(npc.pos.x-player.pos.x,npc.pos.z-player.pos.z).toFixed(1)) : 'no spot'; },
+  dream(){ if(!dreamReady) return 'dream not loaded'; enterEpilogue(); return 'epilogue entered, gate='+JSON.stringify(window.__dreamGate); }
+};
+
+addEventListener('resize',()=>{ camera.aspect=innerWidth/innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth,innerHeight); });
+</script>
+</body>
+</html>
